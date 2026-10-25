@@ -20,6 +20,12 @@ build/
 
 # Next.js
 .next/
+.next-e2e/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
 out/
 
 # Testing

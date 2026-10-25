@@ -191,10 +191,11 @@ Done: Phases 0–3. Proposed from here:
 - [ ] Dependabot (npm, uv/pip, github-actions)
 
 ## Phase S0 — Playwright smoke suite
-- [ ] Playwright (Chromium) in `frontend/`, tests in `frontend/e2e/`
-- [ ] Smoke flows: register → dashboard loads → add expense → appears on dashboard and in /expenses → logout → login again
-- [ ] Runs against a **production build** (`next build` + `next start`) with a real backend + Postgres
-- [ ] Green on Next 14.2.35 before the upgrade
+*Verified: `npm run test:e2e` → 2 passed on Next 14.2.35 (production build, real FastAPI + Postgres 16 via pgserver). `tsc` passes.*
+- [x] Playwright 1.64.1 (Chromium) in `frontend/`, tests in `frontend/e2e/`, `npm run test:e2e`. `playwright.config.ts` starts the backend (runs migrations, then uvicorn on :8100) and a **production build** of the frontend (`next build` + `next start` on :3100, built into `.next-e2e` so a running `next dev` isn't disturbed). It uses `E2E_DATABASE_URL`, rate limits are off for e2e, and the assistant key is blanked.
+- [x] Smoke flow: register → dashboard + default quick-add categories → add expense (dialog, category select) → toast → shown in recent expenses → shown in /expenses → logout → /dashboard redirects to /login → login again → data still there → reload keeps the session (refresh cookie through the proxy)
+- [x] Wrong password shows the error and stays on /login
+- [x] Green on Next 14.2.35 (baseline before the upgrade)
 
 ## Phase N15 — Next.js 15.5 upgrade
 - [ ] Next 14.2.35 → 15.5.28+, React 18 → 19, `eslint-config-next` to match
