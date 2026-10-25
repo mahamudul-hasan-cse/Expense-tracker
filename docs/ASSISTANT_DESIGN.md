@@ -1,6 +1,16 @@
 # AI Financial Assistant — Design (draft for approval)
 
-Status: **proposal, no code written yet.** OpenRouter docs and model data were checked on 2026-10-26: tool calling, provider routing, model fallbacks, usage accounting, errors, prompt caching, `/api/v1/models` and each model's `/endpoints`.
+Status: **proposal, no feature code written yet.** OpenRouter docs and model data were checked on 2026-10-26: tool calling, provider routing, model fallbacks, usage accounting, errors, prompt caching, key info, `/api/v1/models` and each model's `/endpoints`.
+
+## 0. API key setup (Step 0, done 2026-10-26)
+
+| Check | Result |
+|---|---|
+| Key location | `backend/.env` → `OPENROUTER_API_KEY` is set, ends in `…0fa9`, and has the `sk-or-` format. It isn't stored or repeated anywhere else. |
+| Git safety | `backend/.env`, `.env` and `frontend/.env.local` are ignored (`.gitignore` lines 45–46). **No `.env` file appears anywhere in git history** (all branches), and no `sk-or-` key material appears in any committed version. Only the two `.env.example` templates are tracked. |
+| Key works | `GET /api/v1/key` → 200. **Key credit limit $2.00, $2.00 remaining, no reset**, so it's a hard ceiling. `is_free_tier: false`. The account balance (`/api/v1/credits`) is $5.00, with $0.04 used before this work. No model call was made. |
+| Implication | The $2 key limit doubles as the **dev testing budget** (§10). For production, raise the limit (or use a separate production key with its own limit, which I recommend) to match `ASSISTANT_GLOBAL_DAILY_BUDGET_USD` × days. |
+| Rotation | You put the key into the file yourself and it never appeared in chat. If it is ever pasted into a chat, log or screenshot, rotate it in the OpenRouter dashboard. |
 
 ## 1. What it is
 
@@ -56,20 +66,22 @@ Every request sends:
 - Turn on ZDR enforcement.
 - Give the API key its own **credit limit**, a hard ceiling on spend independent of the app's caps.
 
-## 3. Model recommendation
+## 3. Model shortlist (final pick comes from the eval, §13)
 
 Prices are from OpenRouter on 2026-10-26, USD per million tokens. All of these support `tools` and streaming on every listed endpoint.
 
-| Role | Model | In / Out | Context | Why |
+| Candidate | Model | In / Out | Context | Why it's on the list |
 |---|---|---|---|---|
-| **Default (cheap)** | `anthropic/claude-haiku-5.5` | $0.10 / $0.50 | 1M | Cheapest tier with strong tool use. Served only by first-party and major clouds (Anthropic, Bedrock, Vertex, Azure), which is good for privacy routing. Explicit prompt caching. |
-| **Fallback (cheap, different vendor)** | `openai/gpt-6-luna` | $0.10 / $0.50 | 1.05M | Same price from a different vendor, so an outage at one doesn't take out both. Served by OpenAI, Azure, Bedrock. Automatic caching. |
-| **Higher quality** | `anthropic/claude-sonnet-5.5` | $2 / $10 | 1M | For harder analysis, or if the eval shows the cheap models' Bangla or tool accuracy isn't good enough. |
-| (alternative) | `google/gemini-3.8-flash` | $0.825 / $4.125 | 1M | A mid-price option; Google models are generally strong in multilingual use. |
+| **A: cheap** | `anthropic/claude-haiku-5.5` | $0.10 / $0.50 | 1M | Cheapest tier with strong tool use. Served only by first-party and major clouds (Anthropic, Bedrock, Vertex, Azure), which is good for privacy routing. Explicit prompt caching. |
+| **B: cheap, different vendor** | `openai/gpt-6-luna` | $0.10 / $0.50 | 1.05M | Same price from a different vendor. The natural **fallback** for A (an outage at one doesn't take out both), or the main model if it does better in the eval. Automatic caching. |
+| **C: higher quality** | `anthropic/claude-sonnet-5.5` | $2 / $10 | 1M | The quality ceiling. Worth it only if the eval shows A/B fall short on Bangla or numeric accuracy. |
+| (reserve) | `google/gemini-3.8-flash` | $0.825 / $4.125 | 1M | Mid-price. Google models are generally strong in multilingual use; swapped in if A or B fail ZDR routing. |
 
-**Not recommended as default:** `deepseek/deepseek-v4.1-flash` ($0.02/$1.00). It's cheap, but served by smaller providers whose data policies are less clear.
+**Not shortlisted:** `deepseek/deepseek-v4.1-flash` ($0.02/$1.00). It's cheap, but served by smaller providers whose data policies are less clear.
 
-**Honest caveat:** I can't verify Bangla and Banglish quality or real tool-call reliability from docs. `scripts/eval_assistant.py` exists so you can choose with data (§9).
+**How the model gets chosen:**
+- Bangla/Banglish quality and real tool-call reliability can't be judged from docs, so I'll run the eval (§10) on A, B and C once the assistant is built and put the results in §13.
+- Until you approve a model, `ASSISTANT_MODEL` stays **unset** in your `backend/.env`. Code has one documented default (candidate A), used only for local development.
 
 **Estimated cost:** a typical message is about 15k input tokens (system prompt + tools + history + 2–3 tool round trips) and about 500 output tokens.
 - Haiku: about **$0.002 per message**, so a user at the 30-message cap costs about $0.06/day.
@@ -184,6 +196,17 @@ ASSISTANT_GLOBAL_DAILY_BUDGET_USD=5
 
 ## 10. Testing
 
+**The automated suite can never call the real API**, even though a real key exists in `backend/.env`. There are three independent guards:
+1. `conftest.py` sets `OPENROUTER_API_KEY` to a dummy value before the app loads.
+2. The `get_llm_client` dependency is overridden with a `FakeLLMClient` for every test.
+3. The real `LLMClient` refuses to construct when `APP_ENV=test`.
+
+A test also asserts that guard 3 fires. CI never gets a real key.
+
+**Real-API spend during development is capped at $2 total.** This matches your key's limit, so it can't be exceeded. I'll keep a running tally from OpenRouter's reported `cost`, and the A-phase reports will show how much was used. Planned real calls:
+- A handful of integration smoke checks: tool calling, streaming through the proxy, one Bangla reply, one quick-add.
+- The model eval below, about 18 questions × 3 models. Estimated: about $0.05 each for A and B, about $0.80 for C.
+
 - **Tools** run against Postgres with seeded data. Tests cover every tool's numbers, clamping (date ranges, limits, long strings), category resolution, and **isolation**: user B's data is never returned, even when the model passes B's category name or id.
 - **Chat endpoint** with a **fake `LLMClient`**, so no network calls in tests or CI. Tests cover:
   - the tool-call loop and the max-tool-calls cutoff;
@@ -196,7 +219,7 @@ ASSISTANT_GLOBAL_DAILY_BUDGET_USD=5
   - quick-add proposal → confirm → expense exists;
   - insight caching (one generation per day).
 - **Proxy streaming:** an automated check that events arrive incrementally through the Next.js rewrite.
-- **`scripts/eval_assistant.py`** is run by you, manually, with your real key:
+- **`scripts/eval_assistant.py`** is run manually with the real key. Never in CI. I run it on A, B and C after the build, and you can rerun it any time:
   - It seeds a demo user with 3 months of realistic Bangladeshi expenses.
   - It asks 18 questions (6 English, 6 Bangla, 6 Banglish), including quick-add phrases.
   - It extracts ৳ figures from answers and compares them with SQL ground truth.
@@ -214,8 +237,22 @@ ASSISTANT_GLOBAL_DAILY_BUDGET_USD=5
 
 ## 12. Questions for you
 
-1. Approve the **default and fallback models** (Haiku 5.5 → GPT-6 Luna), or wait for eval results before choosing?
+1. Approve the **shortlist** (A Haiku 5.5, B GPT-6 Luna, C Sonnet 5.5) for the eval? The final model and fallback are chosen from the §13 results.
 2. **Opt-in** (assistant off until the user enables it), as recommended, or on by default?
 3. **ZDR required** by default? It's the most private option, but if a model you like has no ZDR endpoint, it can't be used.
 4. Approve **income** and **savings goals** before the assistant?
 5. Is the **global daily budget** default of $5/day and **30 messages/user/day** right for you?
+
+## 13. Evaluation results
+
+*Pending: filled in after Phase A1–A3 by running `scripts/eval_assistant.py --models anthropic/claude-haiku-5.5,openai/gpt-6-luna,anthropic/claude-sonnet-5.5`.*
+
+| Model | Numeric accuracy | Quick-add correct | Bangla / Banglish notes | Avg latency | Total cost |
+|---|---|---|---|---|---|
+| A `anthropic/claude-haiku-5.5` | — | — | — | — | — |
+| B `openai/gpt-6-luna` | — | — | — | — | — |
+| C `anthropic/claude-sonnet-5.5` | — | — | — | — | — |
+
+Recommendation: *after the results.* `ASSISTANT_MODEL` is set only after you approve.
+
+**Dev spend tally:** $0.00 of $2.00. (Step 0 used only the free `/key` and `/credits` endpoints.)
