@@ -17,6 +17,8 @@ Status legend: `[x]` done and verified · `[~]` done but not fully verified (see
 3. **Hosting** for backend + database (Phase 8).
 4. **License** (Phase 9) — suggested MIT.
 5. **Next.js 15.5 upgrade** as its own phase before Phase 8 (recommended; see below). Also: where is the frontend hosted (Vercel or self-hosted)? The answer decides how urgent the upgrade is.
+6. **AI assistant**: approve `docs/ASSISTANT_DESIGN.md` (models, opt-in, ZDR, limits) and the proposed order below.
+7. **Income and savings goals** before the assistant? (recommended)
 
 ## Deployment architecture: API proxy and auth cookie
 
@@ -109,6 +111,28 @@ Do these in order for the first deploy with auth (Phase 2+):
    - Reload the page and confirm you stay signed in.
    - Log out, then reload: you should land on `/login`.
 
+## Proposed order (updated 2026-10-26, pending approval)
+
+Done: Phases 0–3. Proposed from here:
+
+| # | Phase | Why here |
+|---|---|---|
+| 1 | **Phase N15 — Next.js 15.5.28+ upgrade** | Moved up from "after the assistant". The assistant adds a lot of new React code (chat UI, streaming, markdown). Writing it on React 18 and then moving to React 19 means doing that work twice. Doing it now also clears every Next advisory before anything ships. Small phase on today's code. |
+| 2 | **Phase 4 — Tests (existing app)** | Moved before the features. It sets up Vitest/RTL and Playwright and fills backend coverage now, so the new features ship *with* tests instead of being retrofitted. |
+| 3 | **Phase 5 — Code quality and CI** | Also moved earlier. Lint/format churn lands before the big feature diffs, and CI catches regressions while income and the assistant are built. |
+| 4 | **Phase F1 — Income and savings goals** *(if approved)* | Schema changes the assistant depends on (savings rate, goals). |
+| 5 | **Phase A1–A4 — AI assistant** (below) | Built on a tested, linted, React 19 base. Every A-phase ships with its own tests. |
+| 6 | Phase 6 — UX polish | Last, so it also covers the new screens (chat, income, goals). |
+| 7 | Phase 7 — Monitoring | Sentry also captures assistant errors (without content). |
+| 8 | Phase 8 — Docker and deployment | |
+| 9 | Phase 9 — Documentation | |
+| 10 | Phase 10 — Final review | |
+| later | Phase R1 — Receipt photo → expense | After deploy (assessed in the design doc §11). |
+
+**Differences from your suggested order:**
+- **The Next 15 upgrade goes before the features, not after:** it avoids rewriting new UI code for React 19.
+- **Tests and CI go before the features instead of after the assistant:** the assistant is the riskiest change, with security (isolation), money (cost caps) and streaming, so it should land into an existing test harness and CI. Its own tests are part of each A-phase either way.
+
 ## Phase 0 — Verify current state and security fix
 - [x] Migrations from zero, then smoke-tested against Postgres 16 (pgserver, not Docker): create/list budget (spent 400, 40%), deleting a category in use gives 400 with a clear message, expense create/edit (clearing the note works, 3-decimal amount gives 422), recurring create, due-today shows days_until 0, switching to weekly with due_day>7 gives 400, pause removes it from upcoming, rename and duplicate rename gives 400, stats return numbers, CSV export works. Not yet run through `docker-compose`.
 - [x] Upgrade Next.js 14.2.3 → 14.2.35 (latest 14.2.x)
@@ -163,6 +187,40 @@ Do these in order for the first deploy with auth (Phase 2+):
 - [ ] pre-commit (ruff, prettier, eslint)
 - [ ] `.github/workflows/ci.yml` with a Postgres service; cached deps; README badge
 - [ ] Dependabot (npm, uv/pip, github-actions)
+
+## Phase N15 — Next.js 15.5 upgrade (proposed, needs approval)
+- [ ] Next 14.2.35 → 15.5.28+, React 18 → 19, `eslint-config-next` to match
+- [ ] Check Recharts, Radix, next-themes and React Query under React 19; fix breaking changes
+- [ ] `npm audit` shows no `next` advisories; `tsc`, build, and proxy/cookie flow re-checked
+
+## Phase F1 — Income and savings goals (proposed, needs approval)
+- [ ] `incomes` table (user_id, amount, source, date, note) + CRUD + per-user isolation tests
+- [ ] Monthly cashflow endpoint (in, out, saved, savings rate, computed in SQL)
+- [ ] `savings_goals` + `goal_contributions` tables; progress, required monthly amount, on-track flag
+- [ ] UI: income list/form, dashboard cashflow tile, goals page/cards
+
+## Phase A1 — Assistant backend core (see docs/ASSISTANT_DESIGN.md)
+- [ ] `LLMClient` (OpenRouter via `openai` SDK): fallbacks, `provider` privacy routing, attribution headers, usage/cost parsing, error mapping (402/429/502/503/timeout/mid-stream)
+- [ ] Read-only tools with server-bound user_id, argument clamping, user text marked as data; tool tests incl. isolation
+- [ ] Migration: conversations, messages, usage, insights, `users.assistant_enabled`
+- [ ] Chat SSE endpoint + agent loop (max tool calls, one retry for malformed calls, disconnect handling); history endpoints
+- [ ] Per-user daily cap, global daily USD budget, max output tokens; disabled mode without a key; `assistant-usage` CLI
+- [ ] Tests with a fake LLMClient (no network)
+
+## Phase A2 — Assistant frontend
+- [ ] `/assistant` page + floating button; streamed markdown (raw HTML off), stop, retry, status line
+- [ ] Suggested chips (EN/BN); conversation list, continue, delete, clear all
+- [ ] Measured: SSE isn't buffered by the Next.js rewrite (dev + production build); fallback route handler only if needed
+
+## Phase A3 — Quick add, weekly insight, settings
+- [ ] `propose_expense` → confirmation card → existing `POST /expenses`; Edit opens the expense form; proposal status saved
+- [ ] Weekly insight card (once per Asia/Dhaka day per user, cached)
+- [ ] Settings: opt-in toggle, data-sharing notice, delete chat history
+
+## Phase A4 — Evaluation and E2E
+- [ ] `scripts/eval_assistant.py` (seeded demo user, 18 EN/BN/Banglish questions, numeric checks against SQL, `--models` comparison table: accuracy, latency, cost)
+- [ ] Playwright: chips → message (mocked) → confirm quick-add → expense in list
+- [ ] You run the eval with your key; pick the final default model
 
 ## Phase 6 — UX polish
 Partially present: skeletons, toasts, delete confirmations, dark mode.
