@@ -1,7 +1,9 @@
 import { AuthResponse, User } from "@/types";
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+// Same-origin by default: next.config.mjs proxies /api/* to BACKEND_URL.
+// NEXT_PUBLIC_API_URL can point at the backend directly, but then the refresh
+// cookie is cross-site and browsers that block third-party cookies will log users out.
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
 // The access token lives only in memory; the long-lived refresh token is an
 // httpOnly cookie the browser sends to /auth/* (JavaScript can't read it).

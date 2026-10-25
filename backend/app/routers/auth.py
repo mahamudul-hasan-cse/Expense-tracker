@@ -28,7 +28,7 @@ def _issue_tokens(response: Response, user: User) -> TokenResponse:
         refresh_token,
         max_age=refresh_lifetime,
         httponly=True,
-        secure=settings.cookie_secure,
+        secure=settings.secure_cookies,
         samesite=settings.cookie_samesite,
         path=REFRESH_COOKIE_PATH,
     )
@@ -45,7 +45,7 @@ def _clear_refresh_cookie(response: Response) -> None:
     response.delete_cookie(
         REFRESH_COOKIE,
         path=REFRESH_COOKIE_PATH,
-        secure=settings.cookie_secure,
+        secure=settings.secure_cookies,
         samesite=settings.cookie_samesite,
         httponly=True,
     )
