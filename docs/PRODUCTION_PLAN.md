@@ -42,7 +42,7 @@ Browser ──https──▶ app.example.com (Next.js) ──/api/* rewrite─�
 - **Proxy hop:** the backend sees the Next.js server as the client. Phase 3's rate limiter has to read the client IP from `X-Forwarded-For`, and only trust it from the proxy.
 - **Caveat:** on Next 14, self-hosted rewrites are affected by GHSA-ggv3-7p47-pfv8 (request smuggling, see below). Vercel isn't affected because it handles rewrites at its CDN.
 
-## npm audit: remaining advisories (Next 14.2.35, checked 2026-10-26)
+## npm audit: remaining advisories (Next 14.2.35, checked 2026-10-26). *Superseded: resolved by the Next 15.5.28 upgrade (Phase N15); only 4 moderate Tailwind 3 build-time findings remain.*
 
 What the app actually uses:
 - App Router with React Server Components, a static rewrite to the backend, client-side `fetch` only.
@@ -198,10 +198,18 @@ Done: Phases 0–3. Proposed from here:
 - [x] Green on Next 14.2.35 (baseline before the upgrade)
 
 ## Phase N15 — Next.js 15.5 upgrade
-- [ ] Next 14.2.35 → 15.5.28+, React 18 → 19, `eslint-config-next` to match
-- [ ] Check Recharts, Radix, next-themes and React Query under React 19; fix breaking changes
-- [ ] `npm audit` shows no `next` advisories; `tsc`, build, and proxy/cookie flow re-checked
-- [ ] Smoke suite green again on the upgraded build
+*Verified: `tsc`, `npm run build`, the Playwright smoke suite (2/2) on the upgraded production build, `npm audit`, image optimizer still disabled (404), proxy headers unchanged.*
+- [x] Next 14.2.35 → **15.5.28**, React 18 → **19.3.1**, `@types/react(-dom)` 19. (`eslint-config-next` moves to Phase 5, since ESLint isn't installed yet.)
+- [x] Dependencies for React 19:
+  - Radix packages at their latest 1.x/2.x
+  - Recharts 2.12 → 2.15.4
+  - lucide-react 0.378 → **0.577.0**, the last 0.x. 1.x is a major release, so I didn't move to it without asking.
+  - next-themes 0.4.6 (already compatible)
+  - **Removed 5 unused dependencies** (no imports anywhere in `src/`): `react-day-picker` (v8 doesn't accept React 19), `sonner`, `@radix-ui/react-dropdown-menu`, `@radix-ui/react-popover`, `@radix-ui/react-separator`.
+- [x] No code changes needed: no `cookies()`/`headers()`/async params, no server-side `fetch`, and `tsc` is clean under React 19 types.
+- [x] `npm audit`: **all `next` advisories cleared** (critical RCE, request smuggling, RSC DoS, etc.). Next pins PostCSS 8.4.31 (vulnerable, build-time), so an npm `overrides` entry points it at the patched top-level 8.5.31; the build was re-checked. **Remaining: 4 moderate**, all Tailwind 3 build-time tooling (`postcss-selector-parser` via tailwindcss/postcss-nested/tailwindcss-animate). The fix needs Tailwind 4 (major), and they're never shipped to users.
+- [x] Smoke suite **green again** on the upgraded production build.
+- Note: `next start` warns with `output: 'standalone'`. It works for e2e, and production will run `node .next/standalone/server.js` (Phase 8).
 
 ## Phase F1 — Income and savings goals (approved; data model proposed below, needs your OK before building)
 
