@@ -8,17 +8,17 @@ Status legend: `[x]` done and verified · `[~]` done but not fully verified (see
 - **Frontend:** Next.js 14.2.3 (vulnerable) + React Query + shadcn/ui + Recharts. Pages: marketing `/`, `/dashboard`, `/expenses`, `/settings`. Already has skeletons, toasts, delete confirmations, and a dark-mode toggle (next-themes, system default). No ESLint/Prettier config, no tests, no `public/` (no favicon/manifest), no 404 page.
 - **Infra:** `docker-compose.yml` runs Postgres only. No Dockerfiles, no CI.
 - **Repo:** **not a git repository.** Per-phase commits need either `git init` here or a clone of the original GitHub repo (decision needed — see Open questions).
-- **Docker:** not running on this machine, so nothing touching Postgres has been run yet.
+- **Docker:** not running on this machine. **Workaround used for verification:** a throwaway local Postgres 16.2 from the `pgserver` Python package (run from the scratchpad and not a project dependency). Migrations, the smoke tests and pytest ran against it. Docker Compose itself is still unverified.
 
 ## Open questions (need your decision)
 
-1. **Git:** `git init` a fresh repo here, or move this work into a clone of the original repo (keeps history and the remote the deployed frontend uses)?
-2. **Auth approach** (Phase 2).
+1. ~~Git~~: decided, `git init` here.
+2. ~~Auth approach~~: decided, self-built JWT; existing rows go to a first owner user.
 3. **Hosting** for backend + database (Phase 8).
 4. **License** (Phase 9) — suggested MIT.
 
 ## Phase 0 — Verify current state and security fix
-- [ ] Run the API against Postgres and smoke-test budgets, category delete (400), expense and recurring create/edit — **blocked: Docker not running.** Commands to run yourself are in the Phase 0 report.
+- [x] Migrations from zero, then smoke-tested against Postgres 16 (pgserver, not Docker): create/list budget (spent 400, 40%), deleting a category in use gives 400 with a clear message, expense create/edit (clearing the note works, 3-decimal amount gives 422), recurring create, due-today shows days_until 0, switching to weekly with due_day>7 gives 400, pause removes it from upcoming, rename and duplicate rename gives 400, stats return numbers, CSV export works. Not yet run through `docker-compose`.
 - [x] Upgrade Next.js 14.2.3 → 14.2.35 (latest 14.2.x)
 - [x] `npm audit fix` (non-breaking) applied: 9 → 6 findings. Remaining (each needs a major upgrade, so needs your approval):
   - `next` (critical): advisories with no 14.x fix (image optimizer DoS, RSC deserialization DoS, rewrite request smuggling, image cache growth). Fix is Next 16.
@@ -34,12 +34,14 @@ Status legend: `[x]` done and verified · `[~]` done but not fully verified (see
 - [x] Cache invalidation audit: category rename now also refreshes expenses, stats, budgets, recurring and upcoming. Expense changes refresh expenses, stats and budgets. Recurring changes refresh recurring and upcoming. Budget changes refresh budgets and budget summary. Category create/delete refreshes categories (delete only succeeds when the category is unused).
 
 ## Phase 2 — Authentication and data isolation (ASK FIRST)
-- [ ] Propose options; wait for your choice
-- [ ] `users` table + migration adding `user_id` to expenses, categories, budgets, recurring_expenses. Existing rows are assigned to a first user created by the migration (explained before running)
-- [ ] Unique constraints become per-user: category name `(user_id, lower(name))`, budget `(user_id, category_id, month, year)`. Default categories are seeded per user at registration
-- [ ] Register / login / logout, argon2 hashing, expiring tokens, `SECRET_KEY` from env
-- [ ] Every endpoint requires auth and every query is user-filtered; isolation tests
-- [ ] Frontend login/register, protected routes, token on requests, redirect on 401, logout button. **Note:** the marketing page at `/` stays public
+*Verified: 23 pytest tests against Postgres, migration upgrade/downgrade/re-upgrade on a DB with existing data, `alembic check` (no model/migration drift), the CORS + cookie flow over HTTP with curl, `tsc`, `npm run build`. **Not verified: the login UI in a real browser.***
+- [x] Chose self-built JWT
+- [x] `users` table + migration `b7d4e8f1a2c3` adding `user_id` (FK, CASCADE, indexed) to all four tables. Existing rows were assigned to an owner account (`OWNER_EMAIL`, optional `OWNER_PASSWORD`); without a password the owner can't log in until `uv run python -m app.cli set-password <email>`. Checked on real data: every row got the single owner id.
+- [x] Category names unique per user and case-insensitive (`uq_categories_user_name`). Budget uniqueness stays `(category_id, month, year)`, which is already per-user because categories are. The 4 default categories are seeded for each new user.
+- [x] Register / login / logout / refresh / me. Argon2 hashing, 15-minute access JWT, 30-day refresh JWT in an httpOnly cookie scoped to `/api/v1/auth`. Logout bumps `token_version`, which revokes every token. `SECRET_KEY` comes from env; production refuses the dev default.
+- [x] All 19 data endpoints require a Bearer token and filter by `user_id`. Tests prove another user gets 401 or 404 and can't read, edit, delete or reference the first user's data.
+- [~] Frontend: `/login` and `/register`, `RequireAuth` guard on the app pages, token sent with every call, one silent refresh on 401, then redirect to `/login?reason=expired`. Logout button in the navbar. CSV export now uses an authed fetch. Builds, but not clicked through in a browser.
+- **Deploy note:** the deployed frontend must be redeployed with this version, or it will get 401s everywhere.
 
 ## Phase 3 — Backend hardening
 - [ ] CORS from env (`ALLOWED_ORIGINS`); reject `*` when `APP_ENV=production`

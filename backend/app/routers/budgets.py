@@ -7,8 +7,9 @@ from datetime import date
 from decimal import Decimal
 
 from app.database import get_db
+from app.deps import get_current_user, get_user_category
+from app.models.user import User
 from app.models.budget import Budget
-from app.models.category import Category
 from app.models.expense import Expense
 from app.schemas.budget import (
     BudgetCreate,
@@ -22,9 +23,10 @@ from app.schemas.budget import (
 router = APIRouter(prefix="/budgets", tags=["Budgets"])
 
 
-def calculate_spent(db: Session, category_id: UUID, month: int, year: int) -> Decimal:
-    """Calculate total spent for a category in a given month/year."""
+def calculate_spent(db: Session, user_id: UUID, category_id: UUID, month: int, year: int) -> Decimal:
+    """Calculate total spent by a user for a category in a given month/year."""
     result = db.query(func.sum(Expense.amount)).filter(
+        Expense.user_id == user_id,
         Expense.category_id == category_id,
         extract("month", Expense.expense_date) == month,
         extract("year", Expense.expense_date) == year,
@@ -36,7 +38,8 @@ def calculate_spent(db: Session, category_id: UUID, month: int, year: int) -> De
 def get_budgets(
     month: Optional[int] = Query(None, ge=1, le=12),
     year: Optional[int] = Query(None, ge=2020, le=2100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Get budgets for a specific month/year. Defaults to current month."""
     today = date.today()
@@ -46,13 +49,14 @@ def get_budgets(
     budgets = db.query(Budget).options(
         joinedload(Budget.category)
     ).filter(
+        Budget.user_id == current_user.id,
         Budget.month == target_month,
         Budget.year == target_year
     ).all()
 
     result = []
     for budget in budgets:
-        spent = calculate_spent(db, budget.category_id, target_month, target_year)
+        spent = calculate_spent(db, current_user.id, budget.category_id, target_month, target_year)
         percentage = float(spent / budget.amount * 100) if budget.amount > 0 else 0
         result.append(BudgetResponse(
             id=budget.id,
@@ -76,7 +80,8 @@ def get_budgets(
 def get_budget_summary(
     month: Optional[int] = Query(None, ge=1, le=12),
     year: Optional[int] = Query(None, ge=2020, le=2100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Get budget summary for a specific month/year."""
     today = date.today()
@@ -86,6 +91,7 @@ def get_budget_summary(
     budgets = db.query(Budget).options(
         joinedload(Budget.category)
     ).filter(
+        Budget.user_id == current_user.id,
         Budget.month == target_month,
         Budget.year == target_year
     ).all()
@@ -95,7 +101,7 @@ def get_budget_summary(
     total_spent = Decimal("0")
 
     for budget in budgets:
-        spent = calculate_spent(db, budget.category_id, target_month, target_year)
+        spent = calculate_spent(db, current_user.id, budget.category_id, target_month, target_year)
         percentage = float(spent / budget.amount * 100) if budget.amount > 0 else 0
         total_budget += budget.amount
         total_spent += spent
@@ -125,18 +131,18 @@ def get_budget_summary(
 
 
 @router.post("", response_model=BudgetResponse, status_code=status.HTTP_201_CREATED)
-def create_budget(budget_data: BudgetCreate, db: Session = Depends(get_db)):
+def create_budget(
+    budget_data: BudgetCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Create a new budget for a category/month/year."""
-    # Verify category exists
-    category = db.query(Category).filter(Category.id == budget_data.category_id).first()
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Category not found"
-        )
+    # Verify category exists and belongs to the user
+    category = get_user_category(db, budget_data.category_id, current_user)
 
     # Check if budget already exists for this category/month/year
     existing = db.query(Budget).filter(
+        Budget.user_id == current_user.id,
         Budget.category_id == budget_data.category_id,
         Budget.month == budget_data.month,
         Budget.year == budget_data.year
@@ -148,6 +154,7 @@ def create_budget(budget_data: BudgetCreate, db: Session = Depends(get_db)):
         )
 
     budget = Budget(
+        user_id=current_user.id,
         category_id=budget_data.category_id,
         amount=budget_data.amount,
         month=budget_data.month,
@@ -157,7 +164,7 @@ def create_budget(budget_data: BudgetCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(budget)
 
-    spent = calculate_spent(db, budget.category_id, budget.month, budget.year)
+    spent = calculate_spent(db, current_user.id, budget.category_id, budget.month, budget.year)
     percentage = float(spent / budget.amount * 100) if budget.amount > 0 else 0
 
     return BudgetResponse(
@@ -177,11 +184,19 @@ def create_budget(budget_data: BudgetCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{budget_id}", response_model=BudgetResponse)
-def update_budget(budget_id: UUID, budget_data: BudgetUpdate, db: Session = Depends(get_db)):
+def update_budget(
+    budget_id: UUID,
+    budget_data: BudgetUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Update budget amount."""
     budget = db.query(Budget).options(
         joinedload(Budget.category)
-    ).filter(Budget.id == budget_id).first()
+    ).filter(
+        Budget.id == budget_id,
+        Budget.user_id == current_user.id
+    ).first()
 
     if not budget:
         raise HTTPException(
@@ -195,7 +210,7 @@ def update_budget(budget_id: UUID, budget_data: BudgetUpdate, db: Session = Depe
     db.commit()
     db.refresh(budget)
 
-    spent = calculate_spent(db, budget.category_id, budget.month, budget.year)
+    spent = calculate_spent(db, current_user.id, budget.category_id, budget.month, budget.year)
     percentage = float(spent / budget.amount * 100) if budget.amount > 0 else 0
 
     return BudgetResponse(
@@ -215,9 +230,16 @@ def update_budget(budget_id: UUID, budget_data: BudgetUpdate, db: Session = Depe
 
 
 @router.delete("/{budget_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_budget(budget_id: UUID, db: Session = Depends(get_db)):
+def delete_budget(
+    budget_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Delete a budget."""
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = db.query(Budget).filter(
+        Budget.id == budget_id,
+        Budget.user_id == current_user.id
+    ).first()
 
     if not budget:
         raise HTTPException(

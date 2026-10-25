@@ -6,6 +6,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from app.database import get_db
+from app.deps import get_current_user
+from app.models.user import User
 from app.models.expense import Expense
 from app.models.category import Category
 from app.models.recurring import RecurringExpense
@@ -41,7 +43,8 @@ def get_period_dates(period: str, reference_date: date) -> tuple[date, date]:
 def get_stats_summary(
     period: Literal["weekly", "monthly"] = "monthly",
     ref_date: Optional[date] = Query(None, alias="date"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Get spending summary for a period."""
     reference_date = ref_date or date.today()
@@ -51,6 +54,7 @@ def get_stats_summary(
     expenses = db.query(Expense).options(
         joinedload(Expense.category)
     ).filter(
+        Expense.user_id == current_user.id,
         Expense.expense_date >= start_date,
         Expense.expense_date <= end_date
     ).all()
@@ -116,14 +120,20 @@ def get_stats_summary(
 
 
 @router.get("/upcoming-recurring", response_model=UpcomingReminderListResponse)
-def get_upcoming_recurring(db: Session = Depends(get_db)):
+def get_upcoming_recurring(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Get recurring expenses due within the next 7 days."""
     today = date.today()
     week_later = today + timedelta(days=7)
     
     recurring_list = db.query(RecurringExpense).options(
         joinedload(RecurringExpense.category)
-    ).filter(RecurringExpense.is_active == True).all()
+    ).filter(
+        RecurringExpense.user_id == current_user.id,
+        RecurringExpense.is_active == True
+    ).all()
     
     upcoming = []
     for rec in recurring_list:

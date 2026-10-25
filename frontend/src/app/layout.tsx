@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryProvider } from "@/lib/query-provider";
+import { AuthProvider } from "@/lib/auth-provider";
 import { ThemeProvider } from "@/lib/theme-provider";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -27,8 +28,10 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
-            {children}
-            <Toaster />
+            <AuthProvider>
+              {children}
+              <Toaster />
+            </AuthProvider>
           </QueryProvider>
         </ThemeProvider>
       </body>

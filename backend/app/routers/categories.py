@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List
 from uuid import UUID
 
 from app.database import get_db
+from app.deps import get_current_user
+from app.models.user import User
 from app.models.budget import Budget
 from app.models.category import Category
 from app.models.expense import Expense
@@ -20,17 +21,24 @@ router = APIRouter(prefix="/categories", tags=["Categories"])
 
 
 @router.get("", response_model=CategoriesListResponse)
-def get_categories(db: Session = Depends(get_db)):
+def get_categories(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get all categories."""
-    categories = db.query(Category).order_by(Category.is_default.desc(), Category.name).all()
+    categories = db.query(Category).filter(
+        Category.user_id == current_user.id
+    ).order_by(Category.is_default.desc(), Category.name).all()
     return CategoriesListResponse(categories=categories)
 
 
 @router.post("", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
-def create_category(category_data: CategoryCreate, db: Session = Depends(get_db)):
+def create_category(
+    category_data: CategoryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Create a new category."""
     # Check for existing category (case-insensitive)
     existing = db.query(Category).filter(
+        Category.user_id == current_user.id,
         func.lower(Category.name) == func.lower(category_data.name)
     ).first()
     
@@ -41,6 +49,7 @@ def create_category(category_data: CategoryCreate, db: Session = Depends(get_db)
         )
     
     category = Category(
+        user_id=current_user.id,
         name=category_data.name,
         icon=category_data.icon,
         is_default=False
@@ -52,9 +61,17 @@ def create_category(category_data: CategoryCreate, db: Session = Depends(get_db)
 
 
 @router.put("/{category_id}", response_model=CategoryResponse)
-def update_category(category_id: UUID, category_data: CategoryUpdate, db: Session = Depends(get_db)):
+def update_category(
+    category_id: UUID,
+    category_data: CategoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Rename a category or change its icon."""
-    category = db.query(Category).filter(Category.id == category_id).first()
+    category = db.query(Category).filter(
+        Category.id == category_id,
+        Category.user_id == current_user.id
+    ).first()
 
     if not category:
         raise HTTPException(
@@ -77,6 +94,7 @@ def update_category(category_id: UUID, category_data: CategoryUpdate, db: Sessio
     # Check for another category with the same name (case-insensitive)
     if "name" in update_data:
         existing = db.query(Category).filter(
+            Category.user_id == current_user.id,
             func.lower(Category.name) == func.lower(update_data["name"]),
             Category.id != category_id
         ).first()
@@ -95,9 +113,16 @@ def update_category(category_id: UUID, category_data: CategoryUpdate, db: Sessio
 
 
 @router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_category(category_id: UUID, db: Session = Depends(get_db)):
+def delete_category(
+    category_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Delete a category (non-default only)."""
-    category = db.query(Category).filter(Category.id == category_id).first()
+    category = db.query(Category).filter(
+        Category.id == category_id,
+        Category.user_id == current_user.id
+    ).first()
     
     if not category:
         raise HTTPException(

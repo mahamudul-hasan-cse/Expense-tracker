@@ -253,7 +253,9 @@ export function Settings() {
       toast({ title: "Error", description: "From date must be before To date", variant: "destructive" });
       return;
     }
-    api.exportCSV(exportStartDate, exportEndDate);
+    api.exportCSV(exportStartDate, exportEndDate).catch((error: Error) =>
+      toast({ title: "Error", description: error.message || "Export failed", variant: "destructive" })
+    );
   };
 
   if (loading) {

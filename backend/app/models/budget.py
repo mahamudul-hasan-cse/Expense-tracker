@@ -9,6 +9,7 @@ class Budget(Base):
     __tablename__ = "budgets"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)  # Monthly budget limit
     month = Column(Integer, nullable=False)  # 1-12

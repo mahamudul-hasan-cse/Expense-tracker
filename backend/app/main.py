@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import categories, expenses, recurring, stats, export, budgets
+from app.routers import auth, categories, expenses, recurring, stats, export, budgets
 
 settings = get_settings()
 
@@ -23,6 +23,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router, prefix="/api/v1")
 app.include_router(categories.router, prefix="/api/v1")
 app.include_router(expenses.router, prefix="/api/v1")
 app.include_router(recurring.router, prefix="/api/v1")

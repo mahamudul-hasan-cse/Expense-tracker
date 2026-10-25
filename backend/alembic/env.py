@@ -14,6 +14,7 @@ from app.models.category import Category
 from app.models.expense import Expense
 from app.models.recurring import RecurringExpense
 from app.models.budget import Budget
+from app.models.user import User
 
 config = context.config
 # Use the same DATABASE_URL as the app (from .env / environment)

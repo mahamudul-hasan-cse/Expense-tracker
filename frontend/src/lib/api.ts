@@ -18,23 +18,68 @@ import {
   BudgetUpdate,
   BudgetListResponse,
   BudgetSummary,
+  AuthResponse,
+  User,
 } from "@/types";
+import {
+  API_BASE,
+  getAccessToken,
+  redirectToLogin,
+  refreshSession,
+  setAccessToken,
+} from "./auth-token";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
 
-async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${endpoint}`, {
+// FastAPI returns a string detail, or a list of field errors for 422s
+function errorMessage(body: { detail?: unknown }): string {
+  if (typeof body.detail === "string") return body.detail;
+  if (Array.isArray(body.detail)) {
+    return body.detail
+      .map((e: { msg?: string }) => e.msg?.replace(/^Value error, /, ""))
+      .filter(Boolean)
+      .join("; ");
+  }
+  return "API request failed";
+}
+
+function send(endpoint: string, options?: RequestInit): Promise<Response> {
+  const token = getAccessToken();
+  return fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
-    ...options,
   });
+}
+
+/** Fetch with auth; on 401 refresh the session once and retry, else go to login. */
+async function authedFetch(endpoint: string, options?: RequestInit): Promise<Response> {
+  let res = await send(endpoint, options);
+  if (res.status === 401 && !endpoint.startsWith("/auth/")) {
+    if (await refreshSession()) {
+      res = await send(endpoint, options);
+    }
+    if (res.status === 401) {
+      redirectToLogin("expired");
+    }
+  }
+  return res;
+}
+
+async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const res = await authedFetch(endpoint, options);
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(error.detail || "API request failed");
+    throw new ApiError(errorMessage(error), res.status);
   }
 
   // Handle 204 No Content
@@ -46,6 +91,35 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // Auth
+  register: async (email: string, password: string) => {
+    const data = await request<AuthResponse>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    setAccessToken(data.access_token);
+    return data.user;
+  },
+
+  login: async (email: string, password: string) => {
+    const data = await request<AuthResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    setAccessToken(data.access_token);
+    return data.user;
+  },
+
+  logout: async () => {
+    try {
+      await request<void>("/auth/logout", { method: "POST" });
+    } finally {
+      setAccessToken(null);
+    }
+  },
+
+  me: () => request<User>("/auth/me"),
+
   // Categories
   getCategories: () => request<CategoriesResponse>("/categories"),
 
@@ -129,11 +203,20 @@ export const api = {
   getUpcoming: () => request<UpcomingResponse>("/stats/upcoming-recurring"),
 
   // Export
-  exportCSV: (start_date: string, end_date: string) => {
-    window.open(
-      `${API_BASE}/export/csv?start_date=${start_date}&end_date=${end_date}`,
-      "_blank"
-    );
+  // Fetched with the auth header (a plain link can't send it), then saved via a blob URL
+  exportCSV: async (start_date: string, end_date: string) => {
+    const params = new URLSearchParams({ start_date, end_date });
+    const res = await authedFetch(`/export/csv?${params.toString()}`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(errorMessage(error), res.status);
+    }
+    const url = URL.createObjectURL(await res.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `expenses_${start_date}_${end_date}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   },
 
   // Budgets

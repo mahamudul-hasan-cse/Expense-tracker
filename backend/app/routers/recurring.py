@@ -6,8 +6,9 @@ from datetime import date, timedelta
 import calendar
 
 from app.database import get_db
+from app.deps import get_current_user, get_user_category
+from app.models.user import User
 from app.models.recurring import RecurringExpense
-from app.models.category import Category
 from app.schemas.recurring import (
     RecurringExpenseCreate,
     RecurringExpenseUpdate,
@@ -38,10 +39,15 @@ def calculate_next_due(frequency: str, due_day: int, reference_date: date = None
 
 
 @router.get("", response_model=RecurringExpenseListResponse)
-def get_recurring_expenses(db: Session = Depends(get_db)):
+def get_recurring_expenses(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Get all recurring expenses."""
     recurring_list = db.query(RecurringExpense).options(
         joinedload(RecurringExpense.category)
+    ).filter(
+        RecurringExpense.user_id == current_user.id
     ).order_by(RecurringExpense.created_at.desc()).all()
     
     # Add next_due to each item
@@ -63,17 +69,17 @@ def get_recurring_expenses(db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=RecurringExpenseResponse, status_code=status.HTTP_201_CREATED)
-def create_recurring_expense(data: RecurringExpenseCreate, db: Session = Depends(get_db)):
+def create_recurring_expense(
+    data: RecurringExpenseCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Create a new recurring expense."""
-    # Verify category exists
-    category = db.query(Category).filter(Category.id == data.category_id).first()
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Category not found"
-        )
+    # Verify category exists and belongs to the user
+    get_user_category(db, data.category_id, current_user)
     
     recurring = RecurringExpense(
+        user_id=current_user.id,
         name=data.name,
         amount=data.amount,
         category_id=data.category_id,
@@ -98,9 +104,17 @@ def create_recurring_expense(data: RecurringExpenseCreate, db: Session = Depends
 
 
 @router.put("/{recurring_id}", response_model=RecurringExpenseResponse)
-def update_recurring_expense(recurring_id: UUID, data: RecurringExpenseUpdate, db: Session = Depends(get_db)):
+def update_recurring_expense(
+    recurring_id: UUID,
+    data: RecurringExpenseUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Update an existing recurring expense."""
-    recurring = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id).first()
+    recurring = db.query(RecurringExpense).filter(
+        RecurringExpense.id == recurring_id,
+        RecurringExpense.user_id == current_user.id
+    ).first()
     
     if not recurring:
         raise HTTPException(
@@ -134,12 +148,7 @@ def update_recurring_expense(recurring_id: UUID, data: RecurringExpenseUpdate, d
     
     # Verify category if being updated
     if data.category_id is not None:
-        category = db.query(Category).filter(Category.id == data.category_id).first()
-        if not category:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Category not found"
-            )
+        get_user_category(db, data.category_id, current_user)
     
     for key, value in update_data.items():
         setattr(recurring, key, value)
@@ -160,9 +169,16 @@ def update_recurring_expense(recurring_id: UUID, data: RecurringExpenseUpdate, d
 
 
 @router.delete("/{recurring_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_recurring_expense(recurring_id: UUID, db: Session = Depends(get_db)):
+def delete_recurring_expense(
+    recurring_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Delete a recurring expense."""
-    recurring = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id).first()
+    recurring = db.query(RecurringExpense).filter(
+        RecurringExpense.id == recurring_id,
+        RecurringExpense.user_id == current_user.id
+    ).first()
     
     if not recurring:
         raise HTTPException(

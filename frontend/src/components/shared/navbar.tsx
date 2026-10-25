@@ -3,11 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, List, Settings, Wallet } from "lucide-react";
+import { LayoutDashboard, List, LogOut, Settings, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-provider";
 import { ThemeToggle } from "./theme-toggle";
 
 export function Navbar() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+
+  // RequireAuth sends the now signed-out user to /login
+  const handleLogout = () => logout().catch(() => undefined);
 
   const links = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -45,8 +51,18 @@ export function Navbar() {
                 </Link>
               );
             })}
-            <div className="ml-2 border-l pl-2">
+            <div className="ml-2 flex items-center gap-1 border-l pl-2">
               <ThemeToggle />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                onClick={handleLogout}
+                aria-label={user ? `Sign out ${user.email}` : "Sign out"}
+                title={user ? `Sign out (${user.email})` : "Sign out"}
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>

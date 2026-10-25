@@ -7,8 +7,9 @@ from datetime import date
 import math
 
 from app.database import get_db
+from app.deps import get_current_user, get_user_category
+from app.models.user import User
 from app.models.expense import Expense
-from app.models.category import Category
 from app.schemas.expense import (
     ExpenseCreate,
     ExpenseUpdate,
@@ -16,7 +17,6 @@ from app.schemas.expense import (
     ExpenseListResponse,
     PaginationInfo,
 )
-from app.schemas.category import CategoryResponse
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
@@ -30,10 +30,13 @@ def get_expenses(
     end_date: Optional[date] = None,
     search: Optional[str] = Query(None, min_length=1, max_length=100),
     sort: Literal["date_desc", "date_asc", "amount_desc", "amount_asc"] = "date_desc",
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Get expenses with filtering, search, and pagination."""
-    query = db.query(Expense).options(joinedload(Expense.category))
+    query = db.query(Expense).options(joinedload(Expense.category)).filter(
+        Expense.user_id == current_user.id
+    )
     
     # Apply filters
     if category_id:
@@ -44,7 +47,9 @@ def get_expenses(
         query = query.filter(Expense.expense_date <= end_date)
     if search:
         # Search in note field (case-insensitive)
-        query = query.filter(Expense.note.ilike(f"%{search}%"))
+        # Escape LIKE wildcards so they match literally
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query = query.filter(Expense.note.ilike(f"%{escaped}%", escape="\\"))
     
     # Get total count
     total_items = query.count()
@@ -75,17 +80,17 @@ def get_expenses(
 
 
 @router.post("", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
-def create_expense(expense_data: ExpenseCreate, db: Session = Depends(get_db)):
+def create_expense(
+    expense_data: ExpenseCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Create a new expense."""
-    # Verify category exists
-    category = db.query(Category).filter(Category.id == expense_data.category_id).first()
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Category not found"
-        )
+    # Verify category exists and belongs to the user
+    get_user_category(db, expense_data.category_id, current_user)
     
     expense = Expense(
+        user_id=current_user.id,
         amount=expense_data.amount,
         category_id=expense_data.category_id,
         note=expense_data.note,
@@ -101,9 +106,17 @@ def create_expense(expense_data: ExpenseCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{expense_id}", response_model=ExpenseResponse)
-def update_expense(expense_id: UUID, expense_data: ExpenseUpdate, db: Session = Depends(get_db)):
+def update_expense(
+    expense_id: UUID,
+    expense_data: ExpenseUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Update an existing expense."""
-    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    expense = db.query(Expense).filter(
+        Expense.id == expense_id,
+        Expense.user_id == current_user.id
+    ).first()
     
     if not expense:
         raise HTTPException(
@@ -129,12 +142,7 @@ def update_expense(expense_id: UUID, expense_data: ExpenseUpdate, db: Session = 
 
     # Verify category if being updated
     if expense_data.category_id is not None:
-        category = db.query(Category).filter(Category.id == expense_data.category_id).first()
-        if not category:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Category not found"
-            )
+        get_user_category(db, expense_data.category_id, current_user)
     
     # Update fields
     for key, value in update_data.items():
@@ -146,9 +154,16 @@ def update_expense(expense_id: UUID, expense_data: ExpenseUpdate, db: Session = 
 
 
 @router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_expense(expense_id: UUID, db: Session = Depends(get_db)):
+def delete_expense(
+    expense_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Delete an expense."""
-    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    expense = db.query(Expense).filter(
+        Expense.id == expense_id,
+        Expense.user_id == current_user.id
+    ).first()
     
     if not expense:
         raise HTTPException(
