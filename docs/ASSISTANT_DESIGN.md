@@ -1,6 +1,6 @@
 # AI Financial Assistant — Design (draft for approval)
 
-Status: **proposal, no feature code written yet.** OpenRouter docs and model data were checked on 2026-10-26: tool calling, provider routing, model fallbacks, usage accounting, errors, prompt caching, key info, `/api/v1/models` and each model's `/endpoints`.
+Status: **approved 2026-10-26 with the decisions in §12. No feature code written yet** (assistant phases come after Next 15, tests, CI, income/goals). OpenRouter docs and model data were checked on 2026-10-26: tool calling, provider routing, model fallbacks, usage accounting, errors, prompt caching, key info, `/api/v1/models` and each model's `/endpoints`.
 
 ## 0. API key setup (Step 0, done 2026-10-26)
 
@@ -75,16 +75,27 @@ Prices are from OpenRouter on 2026-10-26, USD per million tokens. All of these s
 | **A: cheap** | `anthropic/claude-haiku-5.5` | $0.10 / $0.50 | 1M | Cheapest tier with strong tool use. Served only by first-party and major clouds (Anthropic, Bedrock, Vertex, Azure), which is good for privacy routing. Explicit prompt caching. |
 | **B: cheap, different vendor** | `openai/gpt-6-luna` | $0.10 / $0.50 | 1.05M | Same price from a different vendor. The natural **fallback** for A (an outage at one doesn't take out both), or the main model if it does better in the eval. Automatic caching. |
 | **C: higher quality** | `anthropic/claude-sonnet-5.5` | $2 / $10 | 1M | The quality ceiling. Worth it only if the eval shows A/B fall short on Bangla or numeric accuracy. |
-| (reserve) | `google/gemini-3.8-flash` | $0.825 / $4.125 | 1M | Mid-price. Google models are generally strong in multilingual use; swapped in if A or B fail ZDR routing. |
+| **D: Gemini, cheap Flash-class** | `google/gemini-3.5-flash-lite` | $0.30 / $2.50 | 1M | Added at your request: Gemini is often strong in Bangla. Newest Flash-Lite with tools. If it struggles with tool calls, `google/gemini-3.8-flash` ($0.825 / $4.125) is the stronger Flash option. |
+
+**Zero-data-retention availability** (`GET /api/v1/endpoints/zdr`, checked 2026-10-26). ZDR is **required by default** (`ASSISTANT_REQUIRE_ZDR=true`):
+
+| Candidate | ZDR endpoints with tools | Providers |
+|---|---|---|
+| A `anthropic/claude-haiku-5.5` | 6 | Amazon Bedrock, Google |
+| B `openai/gpt-6-luna` | 3 | Azure only (single provider, so less redundancy) |
+| C `anthropic/claude-sonnet-5.5` | 4 | Amazon Bedrock, Google |
+| D `google/gemini-3.5-flash-lite` | 5 | Google |
+
+All four are usable under ZDR, so **none are excluded**. B relies on a single provider; that counts against it as the *fallback* unless the eval favours it. The list changes as providers update their policies, so the eval re-checks it at run time and skips any model with no ZDR endpoint.
 
 **Not shortlisted:** `deepseek/deepseek-v4.1-flash` ($0.02/$1.00). It's cheap, but served by smaller providers whose data policies are less clear.
 
 **How the model gets chosen:**
-- Bangla/Banglish quality and real tool-call reliability can't be judged from docs, so I'll run the eval (§10) on A, B and C once the assistant is built and put the results in §13.
+- Bangla/Banglish quality and real tool-call reliability can't be judged from docs, so I'll run the eval (§10) on A, B, C and D once the assistant is built and put the results in §13.
 - Until you approve a model, `ASSISTANT_MODEL` stays **unset** in your `backend/.env`. Code has one documented default (candidate A), used only for local development.
 
 **Estimated cost:** a typical message is about 15k input tokens (system prompt + tools + history + 2–3 tool round trips) and about 500 output tokens.
-- Haiku: about **$0.002 per message**, so a user at the 30-message cap costs about $0.06/day.
+- Haiku: about **$0.002 per message**, so a user at the 20-message cap costs about $0.04/day, and the $1/day global cap covers about 500 messages/day.
 - Sonnet: about $0.04 per message.
 
 ## 4. Tools (read-only, `backend/app/assistant/tools.py`)
@@ -142,7 +153,9 @@ These are defined in OpenAI function-calling JSON Schema format. Descriptions ar
 - `assistant_messages` (id, conversation_id → CASCADE, user_id, role `user|assistant`, content text, proposal jsonb null, proposal_status `pending|confirmed|cancelled` null, model, status `ok|interrupted|error`, created_at). Tool traffic isn't stored, only final text and proposals.
 - `assistant_usage` (one row per LLM request: user_id, conversation_id null, kind `chat|insight`, model, prompt/completion/cached tokens, cost_usd numeric(12,6), latency_ms, status, created_at). **No message content.** Daily totals per user and globally are `SUM`s over a (user_id, created_at) index, so no separate counter table is needed.
 - `assistant_insights` (user_id, kind `weekly`, generated_for date (Asia/Dhaka), content, created_at; unique (user_id, kind, generated_for)).
-- `users.assistant_enabled` boolean, default **false**. I recommend opt-in: the user turns it on after reading the data notice in Settings.
+- `users.assistant_enabled` boolean, default **false** (opt-in, decided). Turning it on is easy in two places:
+  - A **"Turn on assistant" card** on `/assistant`, with a one-sentence privacy note ("Your questions and the spending data needed to answer them are sent to OpenRouter and the AI model provider; providers don't keep or train on it.") and a link to the details in Settings.
+  - The **toggle in Settings**.
 
 **Deleting a chat or clearing all** removes conversations and messages. Usage rows are kept, without content, for cost accounting.
 
@@ -181,12 +194,12 @@ ASSISTANT_FALLBACK_MODELS=openai/gpt-6-luna
 ASSISTANT_APP_URL=http://localhost:3000
 ASSISTANT_APP_NAME=Wallet Agent
 ASSISTANT_REQUIRE_ZDR=true
-ASSISTANT_DAILY_MESSAGE_LIMIT=30
+ASSISTANT_DAILY_MESSAGE_LIMIT=20
 ASSISTANT_MAX_OUTPUT_TOKENS=800
 ASSISTANT_MAX_TOOL_CALLS=8
 ASSISTANT_HISTORY_MESSAGES=20
 ASSISTANT_TIMEOUT_SECONDS=60
-ASSISTANT_GLOBAL_DAILY_BUDGET_USD=5
+ASSISTANT_GLOBAL_DAILY_BUDGET_USD=1
 ```
 
 - **Global daily budget:** the sum of today's (Asia/Dhaka) `cost_usd` is checked before each request. Once it's exceeded, the assistant is off for everyone until midnight. The cost is only known after a request, so it can overshoot by about one request; your OpenRouter key's credit limit is the hard stop.
@@ -205,7 +218,7 @@ A test also asserts that guard 3 fires. CI never gets a real key.
 
 **Real-API spend during development is capped at $2 total.** This matches your key's limit, so it can't be exceeded. I'll keep a running tally from OpenRouter's reported `cost`, and the A-phase reports will show how much was used. Planned real calls:
 - A handful of integration smoke checks: tool calling, streaming through the proxy, one Bangla reply, one quick-add.
-- The model eval below, about 18 questions × 3 models. Estimated: about $0.05 each for A and B, about $0.80 for C.
+- The model eval below, about 18 questions × 4 models. Estimated: about $0.05 each for A and B, about $0.10 for D, about $0.80 for C. That's about $1.00 plus about $0.10 of smoke checks. If C runs over budget, it gets a reduced question set.
 
 - **Tools** run against Postgres with seeded data. Tests cover every tool's numbers, clamping (date ranges, limits, long strings), category resolution, and **isolation**: user B's data is never returned, even when the model passes B's category name or id.
 - **Chat endpoint** with a **fake `LLMClient`**, so no network calls in tests or CI. Tests cover:
@@ -235,24 +248,27 @@ A test also asserts that guard 3 fires. CI never gets a real key.
 | **Savings goals** (name, target, deadline, contributions; progress and required monthly amount computed) | **Yes, simple version.** Gives the assistant something concrete to coach toward. | ~½–1 phase |
 | **Receipt photo → expense** (a vision model through OpenRouter, producing a proposal card) | **Later, after deploy.** It needs file upload and storage (object storage, size limits, malware-safe handling), sends extra personal data (receipt images) to providers, and costs more per request. The proposal-card flow built here can be reused. | 1–2 phases |
 
-## 12. Questions for you
+## 12. Decisions (2026-10-26)
 
-1. Approve the **shortlist** (A Haiku 5.5, B GPT-6 Luna, C Sonnet 5.5) for the eval? The final model and fallback are chosen from the §13 results.
-2. **Opt-in** (assistant off until the user enables it), as recommended, or on by default?
-3. **ZDR required** by default? It's the most private option, but if a model you like has no ZDR endpoint, it can't be used.
-4. Approve **income** and **savings goals** before the assistant?
-5. Is the **global daily budget** default of $5/day and **30 messages/user/day** right for you?
+1. **Order:** approved, plus a Playwright smoke suite before the Next 15 upgrade, run again after it.
+2. **Income tracking and simple savings goals** are built before the assistant. The data model is proposed in `PRODUCTION_PLAN.md` (Phase F1).
+3. **Shortlist:** A, B, C, plus **D** `google/gemini-3.5-flash-lite`. Real-call spend stays under $2, with a running total reported.
+4. **Opt-in:** off by default. There's a "Turn on assistant" card on the chat page and a toggle in Settings.
+5. **ZDR only by default.** All four candidates qualify (§3).
+6. **Limits:** `ASSISTANT_GLOBAL_DAILY_BUDGET_USD=1` and `ASSISTANT_DAILY_MESSAGE_LIMIT=20`, both env-configurable. After the eval I'll report the cost per message for the recommended model and suggest final limits.
+7. **Production:** a separate production OpenRouter key with its own limit (added to the pre-deploy checklist).
 
 ## 13. Evaluation results
 
-*Pending: filled in after Phase A1–A3 by running `scripts/eval_assistant.py --models anthropic/claude-haiku-5.5,openai/gpt-6-luna,anthropic/claude-sonnet-5.5`.*
+*Pending: filled in after Phase A1–A3 by running `scripts/eval_assistant.py --models anthropic/claude-haiku-5.5,openai/gpt-6-luna,anthropic/claude-sonnet-5.5,google/gemini-3.5-flash-lite`.*
 
 | Model | Numeric accuracy | Quick-add correct | Bangla / Banglish notes | Avg latency | Total cost |
 |---|---|---|---|---|---|
 | A `anthropic/claude-haiku-5.5` | — | — | — | — | — |
 | B `openai/gpt-6-luna` | — | — | — | — | — |
 | C `anthropic/claude-sonnet-5.5` | — | — | — | — | — |
+| D `google/gemini-3.5-flash-lite` | — | — | — | — | — |
 
-Recommendation: *after the results.* `ASSISTANT_MODEL` is set only after you approve.
+Recommendation: *after the results*, with the average cost per message and suggested final limits. `ASSISTANT_MODEL` is set only after you approve.
 
 **Dev spend tally:** $0.00 of $2.00. (Step 0 used only the free `/key` and `/credits` endpoints.)

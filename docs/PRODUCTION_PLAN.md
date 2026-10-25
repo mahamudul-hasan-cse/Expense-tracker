@@ -16,9 +16,9 @@ Status legend: `[x]` done and verified · `[~]` done but not fully verified (see
 2. ~~Auth approach~~: decided, self-built JWT; existing rows go to a first owner user.
 3. **Hosting** for backend + database (Phase 8).
 4. **License** (Phase 9) — suggested MIT.
-5. **Next.js 15.5 upgrade** as its own phase before Phase 8 (recommended; see below). Also: where is the frontend hosted (Vercel or self-hosted)? The answer decides how urgent the upgrade is.
-6. **AI assistant**: approve `docs/ASSISTANT_DESIGN.md` (models, opt-in, ZDR, limits) and the proposed order below.
-7. **Income and savings goals** before the assistant? (recommended)
+5. ~~Next.js 15.5 upgrade~~: approved as Phase N15, after the S0 smoke suite. Still open: where is the frontend hosted (Vercel or self-hosted)?
+6. ~~AI assistant~~: design approved 2026-10-26 (decisions in `docs/ASSISTANT_DESIGN.md` §12).
+7. ~~Income and savings goals~~: approved, built before the assistant. Data model proposed under Phase F1 below.
 
 ## Deployment architecture: API proxy and auth cookie
 
@@ -78,11 +78,12 @@ Do these in order for the first deploy with auth (Phase 2+):
    # restore if needed: pg_restore --clean --no-owner --dbname="$DATABASE_URL" wallet_agent_YYYYMMDD_HHMM.dump
    ```
    Check the file isn't empty and keep it somewhere other than the server.
-2. **Generate a strong `SECRET_KEY`** (64 random characters) and store it in the host's secret settings, never in git:
+2. **Create a separate production OpenRouter key** in the OpenRouter dashboard with its own credit limit, sized to `ASSISTANT_GLOBAL_DAILY_BUDGET_USD` × days between top-ups. Never reuse the development key. Set it only in the backend host's secret env vars as `OPENROUTER_API_KEY`.
+3. **Generate a strong `SECRET_KEY`** (64 random characters) and store it in the host's secret settings, never in git:
    ```bash
    python -c "import secrets; print(secrets.token_urlsafe(48))"
    ```
-3. **Set every production env var.** Backend:
+4. **Set every production env var.** Backend:
    - `APP_ENV=production`
    - `DATABASE_URL`
    - `SECRET_KEY`
@@ -94,29 +95,30 @@ Do these in order for the first deploy with auth (Phase 2+):
    Frontend (**build-time**):
    - `BACKEND_URL=https://<backend-domain>`
    - Make sure `NEXT_PUBLIC_API_URL` is **not** set
-4. **Run the migration with only `OWNER_EMAIL`**, so no password goes on a command line or into shell history:
+5. **Run the migration with only `OWNER_EMAIL`**, so no password goes on a command line or into shell history:
    ```bash
    cd backend
    OWNER_EMAIL=you@example.com uv run alembic upgrade head
    ```
-5. **Set the owner password interactively.** It prompts twice and the input isn't echoed:
+6. **Set the owner password interactively.** It prompts twice and the input isn't echoed:
    ```bash
    uv run python -m app.cli set-password you@example.com
    ```
-6. **Deploy backend and frontend together.** The old frontend can't talk to the authed API, and the new frontend needs the proxy and `BACKEND_URL`. Deploy the backend first, then right away the frontend built with `BACKEND_URL`.
-7. **Smoke test production:**
+7. **Deploy backend and frontend together.** The old frontend can't talk to the authed API, and the new frontend needs the proxy and `BACKEND_URL`. Deploy the backend first, then right away the frontend built with `BACKEND_URL`.
+8. **Smoke test production:**
    - Log in as the owner and confirm the old data is there.
    - Register a second account and confirm it sees only the defaults.
    - In DevTools → Application → Cookies, `refresh_token` shows HttpOnly, Secure, Strict, and Path `/api/v1/auth` on the frontend domain.
    - Reload the page and confirm you stay signed in.
    - Log out, then reload: you should land on `/login`.
 
-## Proposed order (updated 2026-10-26, pending approval)
+## Order (approved 2026-10-26)
 
 Done: Phases 0–3. Proposed from here:
 
 | # | Phase | Why here |
 |---|---|---|
+| 0 | **Phase S0 — Playwright smoke suite** | Added at your request: register/login, add expense, dashboard + list load, logout. Run against a production build on 14.2.35, then again after the upgrade to prove nothing broke. |
 | 1 | **Phase N15 — Next.js 15.5.28+ upgrade** | Moved up from "after the assistant". The assistant adds a lot of new React code (chat UI, streaming, markdown). Writing it on React 18 and then moving to React 19 means doing that work twice. Doing it now also clears every Next advisory before anything ships. Small phase on today's code. |
 | 2 | **Phase 4 — Tests (existing app)** | Moved before the features. It sets up Vitest/RTL and Playwright and fills backend coverage now, so the new features ship *with* tests instead of being retrofitted. |
 | 3 | **Phase 5 — Code quality and CI** | Also moved earlier. Lint/format churn lands before the big feature diffs, and CI catches regressions while income and the assistant are built. |
@@ -188,16 +190,89 @@ Done: Phases 0–3. Proposed from here:
 - [ ] `.github/workflows/ci.yml` with a Postgres service; cached deps; README badge
 - [ ] Dependabot (npm, uv/pip, github-actions)
 
-## Phase N15 — Next.js 15.5 upgrade (proposed, needs approval)
+## Phase S0 — Playwright smoke suite
+- [ ] Playwright (Chromium) in `frontend/`, tests in `frontend/e2e/`
+- [ ] Smoke flows: register → dashboard loads → add expense → appears on dashboard and in /expenses → logout → login again
+- [ ] Runs against a **production build** (`next build` + `next start`) with a real backend + Postgres
+- [ ] Green on Next 14.2.35 before the upgrade
+
+## Phase N15 — Next.js 15.5 upgrade
 - [ ] Next 14.2.35 → 15.5.28+, React 18 → 19, `eslint-config-next` to match
 - [ ] Check Recharts, Radix, next-themes and React Query under React 19; fix breaking changes
 - [ ] `npm audit` shows no `next` advisories; `tsc`, build, and proxy/cookie flow re-checked
+- [ ] Smoke suite green again on the upgraded build
 
-## Phase F1 — Income and savings goals (proposed, needs approval)
-- [ ] `incomes` table (user_id, amount, source, date, note) + CRUD + per-user isolation tests
-- [ ] Monthly cashflow endpoint (in, out, saved, savings rate, computed in SQL)
-- [ ] `savings_goals` + `goal_contributions` tables; progress, required monthly amount, on-track flag
-- [ ] UI: income list/form, dashboard cashflow tile, goals page/cards
+## Phase F1 — Income and savings goals (approved; data model proposed below, needs your OK before building)
+
+### Proposed data model
+All tables follow the existing conventions: UUID PKs, `user_id → users ON DELETE CASCADE`, money `NUMERIC(12,2)` with the shared `MoneyIn`/`Money` validation (> 0, 2 decimals, ≤ 99,999,999.99), dates that can't be in the future (Asia/Dhaka).
+
+**`incomes`**: money in
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| user_id | UUID FK | |
+| amount | NUMERIC(12,2) | > 0 |
+| source | VARCHAR(100) | required, free text, e.g. "Salary", "Tuition", "Freelance". The UI suggests the user's previous sources. A separate category table isn't worth it for the handful of sources most people have. |
+| income_date | DATE | default today, not in the future |
+| note | VARCHAR(500) NULL | |
+| created_at / updated_at | TIMESTAMPTZ | |
+| Index | (user_id, income_date) | |
+
+**`savings_goals`**
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| user_id | UUID FK | |
+| name | VARCHAR(100) | unique per user, case-insensitive (same as categories) |
+| icon | VARCHAR(50) NULL | emoji |
+| target_amount | NUMERIC(12,2) | > 0 |
+| target_date | DATE NULL | optional deadline; must be in the future when set |
+| status | VARCHAR(20) | `active` / `completed` / `archived`, CHECK constraint |
+| created_at / updated_at | TIMESTAMPTZ | |
+
+**`goal_contributions`**: money put toward (or taken out of) a goal
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| goal_id | UUID FK → savings_goals CASCADE | must belong to the same user (checked server-side) |
+| user_id | UUID FK | denormalized so queries filter by user directly, same as other tables |
+| amount | NUMERIC(12,2) | non-zero. Negative = withdrawal, refused if it would take the goal below 0 |
+| contributed_on | DATE | not in the future |
+| note | VARCHAR(200) NULL | |
+
+**Computed, never stored** (SQL/Python, reused by the assistant tools):
+- Per goal:
+  - `saved` = sum of contributions
+  - `progress_pct`, `remaining`
+  - `months_left`, and `required_per_month` = remaining ÷ months left (when there's a deadline)
+  - `on_track` = saved ≥ the target pro-rated over the elapsed time between created_at and target_date
+- **Cashflow** for a month:
+  - `income` = sum of incomes
+  - `spent` = sum of expenses
+  - `saved` = income − spent (can be negative)
+  - `savings_rate` = saved ÷ income × 100 (null when income is 0)
+- Goal contributions aren't expenses, so they don't change `spent`. They show where the saved money went, and the UI shows "unallocated savings" = saved − contributions this month.
+
+### How it shows up
+- **Dashboard:** a "This month" cashflow row above the charts with **Income / Spent / Saved (savings-rate %)**. Saved is red when negative. Until the first income is added it shows an "Add your income" prompt instead. Below it, a **Goals** card shows up to 3 active goals with progress bars, "৳X of ৳Y", and "৳Z/month needed".
+- **New pages:**
+  - `/income`: list with month filter, add/edit/delete, source suggestions.
+  - `/goals`: goal cards plus an add-contribution dialog.
+  - Navbar: Dashboard, Expenses, Income, Goals, Settings. Phase 6 makes this a mobile bottom nav.
+- **API:**
+  - `/incomes` CRUD (paginated, same shape as expenses)
+  - `/goals` CRUD
+  - `/goals/{id}/contributions` (list/add/delete)
+  - `/stats/cashflow?month=YYYY-MM`
+  - `/stats/cashflow/trend?months=6` (for a later in-vs-out chart)
+- **CSV export:** a separate income export, so the existing expense CSV format doesn't change.
+- **Out of scope for now:** recurring income (e.g. auto-salary) and multiple currencies.
+
+### Checklist
+- [ ] Migration for the 3 tables + models/schemas/routers, all user-scoped
+- [ ] Cashflow + goal-progress calculations, with tests (including isolation, withdrawal below 0 refused, deadline math)
+- [ ] UI: /income, /goals, dashboard cashflow row + goals card, navbar entries
 
 ## Phase A1 — Assistant backend core (see docs/ASSISTANT_DESIGN.md)
 - [ ] `LLMClient` (OpenRouter via `openai` SDK): fallbacks, `provider` privacy routing, attribution headers, usage/cost parsing, error mapping (402/429/502/503/timeout/mid-stream)
