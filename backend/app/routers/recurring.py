@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from uuid import UUID
@@ -8,6 +8,7 @@ import calendar
 from app.database import get_db
 from app.deps import get_current_user, get_user_category
 from app.models.user import User
+from app.pagination import paginate
 from app.models.recurring import RecurringExpense
 from app.schemas.recurring import (
     RecurringExpenseCreate,
@@ -40,6 +41,8 @@ def calculate_next_due(frequency: str, due_day: int, reference_date: date = None
 
 @router.get("", response_model=RecurringExpenseListResponse)
 def get_recurring_expenses(
+    page: int = Query(1, ge=1),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -48,7 +51,8 @@ def get_recurring_expenses(
         joinedload(RecurringExpense.category)
     ).filter(
         RecurringExpense.user_id == current_user.id
-    ).order_by(RecurringExpense.created_at.desc()).all()
+    ).order_by(RecurringExpense.created_at.desc(), RecurringExpense.id)
+    recurring_list, pagination = paginate(recurring_list, page, limit)
     
     # Add next_due to each item
     result = []
@@ -65,7 +69,7 @@ def get_recurring_expenses(
         }
         result.append(rec_dict)
     
-    return RecurringExpenseListResponse(recurring_expenses=result)
+    return RecurringExpenseListResponse(recurring_expenses=result, pagination=pagination)
 
 
 @router.post("", response_model=RecurringExpenseResponse, status_code=status.HTTP_201_CREATED)

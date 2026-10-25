@@ -4,6 +4,13 @@ from pydantic import ValidationError
 from app.config import DEV_SECRET_KEY, Settings
 
 STRONG_KEY = "x" * 48
+PROD = {
+    "app_env": "production",
+    "secret_key": STRONG_KEY,
+    "database_url": "postgresql://u:p@db.example.com/wallet",
+    "allowed_origins": "https://app.example.com",
+    "_env_file": None,
+}
 
 
 def test_development_defaults_allow_plain_http_cookies():
@@ -12,9 +19,16 @@ def test_development_defaults_allow_plain_http_cookies():
     assert s.cookie_samesite == "strict"
 
 
-def test_production_defaults_to_secure_cookies():
-    s = Settings(app_env="production", secret_key=STRONG_KEY, _env_file=None)
+def test_valid_production_config():
+    s = Settings(**PROD)
     assert s.secure_cookies is True
+    assert s.origins == ["https://app.example.com"]
+
+
+def test_origins_parsing_and_legacy_env_name(monkeypatch):
+    monkeypatch.setenv("CORS_ORIGINS", "https://a.example.com, https://b.example.com")
+    monkeypatch.delenv("ALLOWED_ORIGINS", raising=False)
+    assert Settings(_env_file=None).origins == ["https://a.example.com", "https://b.example.com"]
 
 
 @pytest.mark.parametrize(
@@ -22,12 +36,15 @@ def test_production_defaults_to_secure_cookies():
     [
         {"secret_key": DEV_SECRET_KEY},
         {"secret_key": "too-short"},
-        {"secret_key": STRONG_KEY, "cookie_secure": False},
+        {"cookie_secure": False},
+        {"allowed_origins": "*"},
+        {"allowed_origins": " "},
+        {"database_url": "postgresql://wallet_user:wallet_pass@localhost:5432/wallet_agent"},
     ],
 )
 def test_production_rejects_insecure_settings(overrides):
     with pytest.raises(ValidationError):
-        Settings(app_env="production", _env_file=None, **overrides)
+        Settings(**{**PROD, **overrides})
 
 
 def test_samesite_none_requires_secure():

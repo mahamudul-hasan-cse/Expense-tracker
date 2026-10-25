@@ -4,6 +4,7 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 from app.schemas.types import Money, MoneyIn
+from app.schemas.pagination import PaginationInfo
 
 
 class BudgetBase(BaseModel):
@@ -46,6 +47,7 @@ class BudgetResponse(BaseModel):
 
 class BudgetListResponse(BaseModel):
     budgets: list[BudgetResponse]
+    pagination: PaginationInfo
 
 
 class BudgetSummary(BaseModel):

@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Optional, Literal, Annotated
 from app.schemas.category import CategoryResponse
 from app.schemas.types import Money, MoneyIn
+from app.schemas.pagination import PaginationInfo
 
 
 class RecurringExpenseBase(BaseModel):
@@ -52,3 +53,4 @@ class RecurringExpenseResponse(BaseModel):
 
 class RecurringExpenseListResponse(BaseModel):
     recurring_expenses: list[RecurringExpenseResponse]
+    pagination: PaginationInfo

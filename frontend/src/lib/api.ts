@@ -35,8 +35,10 @@ export class ApiError extends Error {
   }
 }
 
-// FastAPI returns a string detail, or a list of field errors for 422s
-function errorMessage(body: { detail?: unknown }): string {
+// Backend errors look like {"error": {"code", "message", "details", "request_id"}}.
+// The legacy FastAPI {"detail": ...} shape is still handled for safety.
+function errorMessage(body: { error?: { message?: unknown }; detail?: unknown }): string {
+  if (typeof body.error?.message === "string") return body.error.message;
   if (typeof body.detail === "string") return body.detail;
   if (Array.isArray(body.detail)) {
     return body.detail

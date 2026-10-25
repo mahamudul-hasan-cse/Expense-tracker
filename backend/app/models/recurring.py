@@ -9,7 +9,7 @@ class RecurringExpense(Base):
     __tablename__ = "recurring_expenses"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(200), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=False)
@@ -26,6 +26,7 @@ class RecurringExpense(Base):
         CheckConstraint("due_day >= 1 AND due_day <= 31", name="check_due_day_range"),
         # Index for filtering active recurring expenses
         Index("ix_recurring_is_active", "is_active"),
+        Index("ix_recurring_user_active", "user_id", "is_active"),
     )
 
     # Relationships

@@ -9,7 +9,7 @@ class Expense(Base):
     __tablename__ = "expenses"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=False)
     note = Column(String(500), nullable=True)
@@ -25,6 +25,8 @@ class Expense(Base):
         Index("ix_expenses_category_id", "category_id"),
         Index("ix_expenses_date_category", "expense_date", "category_id"),
         Index("ix_expenses_created_at", "created_at"),
+        # Per-user listing/stats: WHERE user_id = ? ORDER BY expense_date DESC, created_at DESC
+        Index("ix_expenses_user_date", "user_id", "expense_date", "created_at"),
     )
 
     # Relationships

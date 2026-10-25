@@ -3,6 +3,8 @@ from uuid import UUID
 from datetime import datetime
 from typing import Optional
 
+from app.schemas.pagination import PaginationInfo
+
 
 class CategoryBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -48,3 +50,4 @@ class CategoryResponse(BaseModel):
 
 class CategoriesListResponse(BaseModel):
     categories: list[CategoryResponse]
+    pagination: PaginationInfo

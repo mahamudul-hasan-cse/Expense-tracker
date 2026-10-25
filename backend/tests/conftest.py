@@ -14,6 +14,8 @@ TEST_DATABASE_URL = os.environ.get(
 # Must be set before the app (and its cached settings) is imported
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["APP_ENV"] = "test"
+# Rate limits are tested explicitly in test_hardening.py
+os.environ["RATE_LIMIT_ENABLED"] = "false"
 
 import pytest  # noqa: E402
 from alembic import command  # noqa: E402

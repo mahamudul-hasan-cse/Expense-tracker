@@ -1,13 +1,14 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
+from app.errors import error_response
 from app.models.user import User
+from app.rate_limit import limiter, login_attempts_allowed, record_failed_login
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from app.security import create_token, decode_token, verify_password
 from app.services.users import create_user, get_user_by_email
@@ -65,7 +66,8 @@ def _user_from_refresh_token(db: Session, token: str | None) -> User | None:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register(data: RegisterRequest, response: Response, db: Session = Depends(get_db)):
+@limiter.limit(lambda: get_settings().rate_limit_auth)
+def register(request: Request, data: RegisterRequest, response: Response, db: Session = Depends(get_db)):
     """Create an account (with the default categories) and sign in."""
     if get_user_by_email(db, data.email):
         raise HTTPException(
@@ -79,10 +81,20 @@ def register(data: RegisterRequest, response: Response, db: Session = Depends(ge
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(data: LoginRequest, response: Response, db: Session = Depends(get_db)):
+@limiter.limit(lambda: get_settings().rate_limit_auth)
+def login(request: Request, data: LoginRequest, response: Response, db: Session = Depends(get_db)):
     """Sign in with email and password."""
+    # Per-account brute-force guard; works even when client IPs can't be trusted
+    email_key = data.email.strip().lower()
+    if not login_attempts_allowed(email_key):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed sign-in attempts for this account. Please try again later."
+        )
+
     user = get_user_by_email(db, data.email)
     if not verify_password(user.password_hash if user else None, data.password):
+        record_failed_login(email_key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
@@ -100,10 +112,7 @@ def refresh(
     user = _user_from_refresh_token(db, refresh_token)
     if user is None:
         # Returned (not raised) so the cookie-clearing header is kept
-        expired = JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"detail": "Session expired, please log in again"},
-        )
+        expired = error_response(401, "Session expired, please log in again")
         _clear_refresh_cookie(expired)
         return expired
     return _issue_tokens(response, user)

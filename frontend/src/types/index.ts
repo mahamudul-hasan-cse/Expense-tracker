@@ -131,6 +131,7 @@ export interface PaginatedResponse<T> {
 // API Response types
 export interface CategoriesResponse {
   categories: Category[];
+  pagination: PaginationInfo;
 }
 
 export interface ExpenseListResponse {
@@ -140,6 +141,7 @@ export interface ExpenseListResponse {
 
 export interface RecurringListResponse {
   recurring_expenses: RecurringExpense[];
+  pagination: PaginationInfo;
 }
 
 export interface UpcomingResponse {
@@ -171,6 +173,7 @@ export interface BudgetUpdate {
 
 export interface BudgetListResponse {
   budgets: Budget[];
+  pagination: PaginationInfo;
 }
 
 export interface BudgetSummary {

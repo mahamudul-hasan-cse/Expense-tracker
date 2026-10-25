@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from uuid import UUID
@@ -6,6 +6,7 @@ from uuid import UUID
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.user import User
+from app.pagination import paginate
 from app.models.budget import Budget
 from app.models.category import Category
 from app.models.expense import Expense
@@ -21,12 +22,18 @@ router = APIRouter(prefix="/categories", tags=["Categories"])
 
 
 @router.get("", response_model=CategoriesListResponse)
-def get_categories(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_categories(
+    page: int = Query(1, ge=1),
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Get all categories."""
     categories = db.query(Category).filter(
         Category.user_id == current_user.id
-    ).order_by(Category.is_default.desc(), Category.name).all()
-    return CategoriesListResponse(categories=categories)
+    ).order_by(Category.is_default.desc(), Category.name, Category.id)
+    categories, pagination = paginate(categories, page, limit)
+    return CategoriesListResponse(categories=categories, pagination=pagination)
 
 
 @router.post("", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)

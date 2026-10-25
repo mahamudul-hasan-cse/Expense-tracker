@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Optional, Annotated
 from app.schemas.category import CategoryResponse
 from app.schemas.types import Money, MoneyIn
+from app.schemas.pagination import PaginationInfo
 
 
 class ExpenseBase(BaseModel):
@@ -49,13 +50,6 @@ class ExpenseResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class PaginationInfo(BaseModel):
-    page: int
-    limit: int
-    total_items: int
-    total_pages: int
 
 
 class ExpenseListResponse(BaseModel):

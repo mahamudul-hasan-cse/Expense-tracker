@@ -4,18 +4,17 @@ from sqlalchemy import desc, asc
 from typing import Optional, Literal
 from uuid import UUID
 from datetime import date
-import math
 
 from app.database import get_db
 from app.deps import get_current_user, get_user_category
 from app.models.user import User
+from app.pagination import paginate
 from app.models.expense import Expense
 from app.schemas.expense import (
     ExpenseCreate,
     ExpenseUpdate,
     ExpenseResponse,
     ExpenseListResponse,
-    PaginationInfo,
 )
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
@@ -51,10 +50,6 @@ def get_expenses(
         escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         query = query.filter(Expense.note.ilike(f"%{escaped}%", escape="\\"))
     
-    # Get total count
-    total_items = query.count()
-    total_pages = math.ceil(total_items / limit) if total_items > 0 else 1
-    
     # Apply sorting
     sort_mapping = {
         "date_desc": desc(Expense.expense_date),
@@ -62,21 +57,10 @@ def get_expenses(
         "amount_desc": desc(Expense.amount),
         "amount_asc": asc(Expense.amount),
     }
-    query = query.order_by(sort_mapping[sort], desc(Expense.created_at))
+    query = query.order_by(sort_mapping[sort], desc(Expense.created_at), Expense.id)
     
-    # Apply pagination
-    offset = (page - 1) * limit
-    expenses = query.offset(offset).limit(limit).all()
-    
-    return ExpenseListResponse(
-        expenses=expenses,
-        pagination=PaginationInfo(
-            page=page,
-            limit=limit,
-            total_items=total_items,
-            total_pages=total_pages
-        )
-    )
+    expenses, pagination = paginate(query, page, limit)
+    return ExpenseListResponse(expenses=expenses, pagination=pagination)
 
 
 @router.post("", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)

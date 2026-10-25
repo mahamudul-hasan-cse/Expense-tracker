@@ -48,7 +48,7 @@ def test_login_success_and_failure(client):
     assert bad.status_code == 401
     missing = client.post(f"{API}/auth/login", json={"email": "nobody@example.com", "password": "whatever"})
     assert missing.status_code == 401
-    assert bad.json()["detail"] == missing.json()["detail"]
+    assert bad.json()["error"]["message"] == missing.json()["error"]["message"]
 
 
 def test_me_requires_valid_token(client, auth_headers):

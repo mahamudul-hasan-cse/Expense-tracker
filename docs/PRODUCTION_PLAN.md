@@ -136,14 +136,20 @@ Do these in order for the first deploy with auth (Phase 2+):
 - **Deploy note:** the deployed frontend must be redeployed with this version, or it will get 401s everywhere.
 
 ## Phase 3 — Backend hardening
-- [ ] CORS from env (`ALLOWED_ORIGINS`); reject `*` when `APP_ENV=production`
-- [ ] slowapi rate limiting; stricter on auth routes
-- [ ] `/health` checks DB connectivity
-- [ ] Uniform error body `{ "error": { "code", "message", "details" } }`; no stack traces in production. **Note:** the frontend reads `detail` today, so it will be updated to match
-- [ ] Structured (JSON) logging, `LOG_LEVEL` from env
-- [ ] `APP_ENV` switch; fail fast on missing required vars (e.g. `SECRET_KEY` in production)
-- [ ] Indexes on `user_id` (+ composite with date) via migration. Date and category indexes already exist
-- [ ] Pagination: expenses already paginated. Categories, recurring and budgets are small per-user lists, so they get optional `limit/offset` params with backward-compatible defaults
+*Verified: 51 pytest tests against Postgres. Ran uvicorn in production mode and saw JSON logs, `/health`, the error body, and the client IP taken from a trusted proxy. Ran the fail-fast startup with missing vars. `alembic upgrade` + `alembic check` (no drift). `tsc` and `npm run build`.*
+- [x] CORS: `ALLOWED_ORIGINS` (legacy `CORS_ORIGINS` accepted). Methods and headers are listed explicitly. Production refuses `*` or an empty list. Tested: the allowed origin gets ACAO plus credentials, other origins get nothing. (The browser now goes through the same-origin proxy, so CORS is defense in depth.)
+- [x] Rate limiting (slowapi): 120/min per IP by default. `/auth/login` and `/auth/register` get 5/min and 20/hour per IP. **Plus 10 failed logins/hour per account, whatever the IP** (see the client-IP note below). `/health` is exempt. Tested: 6th login → 429; 11th failed login on one account → 429 even with the right password, other accounts unaffected. Storage is in-memory per process; use `RATE_LIMIT_STORAGE_URI=redis://…` with several instances.
+- [x] `GET /health` runs `SELECT 1` and returns `{"status":"healthy","database":"ok"}`, or 503 with the error body. Tested both.
+- [x] One error format everywhere: `{"error":{"code","message","details","request_id"}}`. This covers HTTP errors, 422 (with per-field `details`), unknown routes, 429, IntegrityError → 409, and unhandled → 500 with a generic message (traceback goes only to the logs; tested that nothing leaks). The frontend parses the new shape. `X-Request-ID` is returned on every response and accepted from callers.
+- [x] Logging: one line per request (method, path, status, duration_ms, client_ip, request_id). JSON in production, readable text in development. `LOG_LEVEL` from env. Uvicorn's duplicate access log is off.
+- [x] Settings via pydantic-settings (`SettingsConfigDict`). `APP_ENV` switch. Production fails at startup with a clear list of problems: SECRET_KEY missing or short, DATABASE_URL not set, insecure cookie, bad origins.
+- [x] Indexes (migration `c3a9d5e7f8b1`): `expenses(user_id, expense_date, created_at)`, `recurring_expenses(user_id, is_active)`, `budgets(user_id, year, month)`. The single-column `user_id` indexes they make redundant are dropped (no data touched). Budget "spent" now uses a date range (index-friendly) in one grouped query instead of one query per budget. Not benchmarked: the test data is too small for meaningful EXPLAIN plans.
+- [x] Pagination: `page`/`limit` plus a `pagination` object on categories (default 200), recurring (100) and budgets (100), matching expenses. `/budgets/summary` and `/stats/*` stay unpaginated because their totals must cover everything and they're bounded by categories and days. Response change is additive.
+
+### Client IPs behind the proxy (checked 2026-10-26)
+- A self-hosted `next start` rewrite **passes `X-Forwarded-For` through unchanged and doesn't add the client IP** (checked with a header-echo server). Vercel's behaviour wasn't checked here.
+- Uvicorn with `--proxy-headers --forwarded-allow-ips=<trusted proxy IPs>` sets the client IP to the **last** `X-Forwarded-For` entry, but only when the direct peer is trusted (checked).
+- So the per-IP limits are only accurate when something you trust in front of Next.js (the platform's load balancer or CDN) **appends** the real client IP, and the backend trusts only the IPs it's reached through. If you can't guarantee that, the per-IP limits fall back to the proxy's IP (everyone shares one bucket) or can be spoofed. The **per-account failed-login limit** is the backstop that doesn't depend on IPs. This gets settled for the chosen host in Phase 8.
 
 ## Phase 4 — Tests
 - [ ] Backend pytest against a separate Postgres test DB (models use Postgres UUID, so SQLite is not an option). Coverage target 80%+
