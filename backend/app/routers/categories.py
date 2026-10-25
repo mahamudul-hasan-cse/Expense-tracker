@@ -11,6 +11,7 @@ from app.models.expense import Expense
 from app.models.recurring import RecurringExpense
 from app.schemas.category import (
     CategoryCreate,
+    CategoryUpdate,
     CategoryResponse,
     CategoriesListResponse,
 )
@@ -45,6 +46,49 @@ def create_category(category_data: CategoryCreate, db: Session = Depends(get_db)
         is_default=False
     )
     db.add(category)
+    db.commit()
+    db.refresh(category)
+    return category
+
+
+@router.put("/{category_id}", response_model=CategoryResponse)
+def update_category(category_id: UUID, category_data: CategoryUpdate, db: Session = Depends(get_db)):
+    """Rename a category or change its icon."""
+    category = db.query(Category).filter(Category.id == category_id).first()
+
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found"
+        )
+
+    update_data = category_data.model_dump(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one field must be provided"
+        )
+    if "name" in update_data and update_data["name"] is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="name cannot be null"
+        )
+
+    # Check for another category with the same name (case-insensitive)
+    if "name" in update_data:
+        existing = db.query(Category).filter(
+            func.lower(Category.name) == func.lower(update_data["name"]),
+            Category.id != category_id
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Category with this name already exists"
+            )
+
+    for key, value in update_data.items():
+        setattr(category, key, value)
+
     db.commit()
     db.refresh(category)
     return category

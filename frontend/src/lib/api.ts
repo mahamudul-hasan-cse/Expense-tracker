@@ -1,6 +1,7 @@
 import {
   Category,
   CategoryCreate,
+  CategoryUpdate,
   CategoriesResponse,
   Expense,
   ExpenseCreate,
@@ -51,6 +52,12 @@ export const api = {
   createCategory: (data: CategoryCreate) =>
     request<Category>("/categories", {
       method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateCategory: (id: string, data: CategoryUpdate) =>
+    request<Category>(`/categories/${id}`, {
+      method: "PUT",
       body: JSON.stringify(data),
     }),
 

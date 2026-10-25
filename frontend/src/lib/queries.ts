@@ -4,6 +4,7 @@ import {
   ExpenseCreate,
   ExpenseUpdate,
   CategoryCreate,
+  CategoryUpdate,
   RecurringExpenseCreate,
   RecurringExpenseUpdate,
   BudgetCreate,
@@ -52,6 +53,21 @@ export function useCreateCategory() {
     mutationFn: (data: CategoryCreate) => api.createCategory(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+    },
+  });
+}
+
+export function useUpdateCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: CategoryUpdate }) =>
+      api.updateCategory(id, data),
+    onSuccess: () => {
+      // Category names/icons are embedded in expenses, stats, budgets and recurring items
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      queryClient.invalidateQueries({ queryKey: queryKeys.recurring });
+      queryClient.invalidateQueries({ queryKey: queryKeys.upcoming });
+      invalidateExpenseData(queryClient);
     },
   });
 }

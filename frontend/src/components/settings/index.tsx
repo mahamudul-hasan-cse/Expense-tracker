@@ -38,6 +38,7 @@ import { Plus, Edit2, Trash2, Download } from "lucide-react";
 import {
   useCategories,
   useCreateCategory,
+  useUpdateCategory,
   useDeleteCategory,
   useRecurring,
   useCreateRecurring,
@@ -53,6 +54,7 @@ export function Settings() {
   const { data: categoriesData, isLoading: categoriesLoading } = useCategories();
   const { data: recurringData, isLoading: recurringLoading } = useRecurring();
   const createCategoryMutation = useCreateCategory();
+  const updateCategoryMutation = useUpdateCategory();
   const deleteCategoryMutation = useDeleteCategory();
   const createRecurringMutation = useCreateRecurring();
   const updateRecurringMutation = useUpdateRecurring();
@@ -64,6 +66,7 @@ export function Settings() {
 
   // Category dialog
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [categoryIcon, setCategoryIcon] = useState("");
 
@@ -91,27 +94,57 @@ export function Settings() {
   }
 
   // Category handlers
-  const handleAddCategory = () => {
-    if (!categoryName) {
+  const openCategoryDialog = (category?: Category) => {
+    setEditingCategory(category ?? null);
+    setCategoryName(category?.name ?? "");
+    setCategoryIcon(category?.icon ?? "");
+    setCategoryDialogOpen(true);
+  };
+
+  const handleSaveCategory = () => {
+    const name = categoryName.trim();
+    if (!name) {
       toast({ title: "Error", description: "Category name is required", variant: "destructive" });
       return;
     }
-    createCategoryMutation.mutate(
-      { name: categoryName, icon: categoryIcon || undefined },
+    const onSuccess = (message: string) => {
+      toast({ title: "Success", description: message });
+      setCategoryDialogOpen(false);
+      setEditingCategory(null);
+      setCategoryName("");
+      setCategoryIcon("");
+    };
+    const onError = (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save category",
+        variant: "destructive",
+      });
+    };
+    if (editingCategory) {
+      updateCategoryMutation.mutate(
+        { id: editingCategory.id, data: { name, icon: categoryIcon.trim() || null } },
+        { onSuccess: () => onSuccess("Category updated successfully"), onError }
+      );
+    } else {
+      createCategoryMutation.mutate(
+        { name, icon: categoryIcon.trim() || undefined },
+        { onSuccess: () => onSuccess("Category added successfully"), onError }
+      );
+    }
+  };
+
+  const handleToggleRecurring = (rec: RecurringExpense) => {
+    updateRecurringMutation.mutate(
+      { id: rec.id, data: { is_active: !rec.is_active } },
       {
-        onSuccess: () => {
-          toast({ title: "Success", description: "Category added successfully" });
-          setCategoryDialogOpen(false);
-          setCategoryName("");
-          setCategoryIcon("");
-        },
-        onError: (error) => {
+        onSuccess: () =>
           toast({
-            title: "Error",
-            description: error instanceof Error ? error.message : "Failed to add category",
-            variant: "destructive",
-          });
-        },
+            title: "Success",
+            description: `${rec.name} ${rec.is_active ? "paused" : "resumed"}`,
+          }),
+        onError: (error) =>
+          toast({ title: "Error", description: error.message, variant: "destructive" }),
       }
     );
   };
@@ -236,7 +269,7 @@ export function Settings() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg">Categories</CardTitle>
-          <Button size="sm" onClick={() => setCategoryDialogOpen(true)} className="gap-1">
+          <Button size="sm" onClick={() => openCategoryDialog()} className="gap-1">
             <Plus className="h-4 w-4" />
             Add Category
           </Button>
@@ -255,18 +288,29 @@ export function Settings() {
                     <span className="text-xs text-muted-foreground">(default)</span>
                   )}
                 </div>
-                {!category.is_default && (
+                <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => {
-                      setDeletingCategory(category);
-                      setDeleteCategoryDialogOpen(true);
-                    }}
+                    aria-label={`Edit ${category.name}`}
+                    onClick={() => openCategoryDialog(category)}
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Edit2 className="h-4 w-4" />
                   </Button>
-                )}
+                  {!category.is_default && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Delete ${category.name}`}
+                      onClick={() => {
+                        setDeletingCategory(category);
+                        setDeleteCategoryDialogOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -288,19 +332,38 @@ export function Settings() {
               {recurring.map((rec) => (
                 <div
                   key={rec.id}
-                  className="flex items-center justify-between rounded-lg border p-3"
+                  className={`flex items-center justify-between rounded-lg border p-3 ${rec.is_active ? "" : "opacity-60"}`}
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-xl">{rec.category.icon}</span>
                     <div>
-                      <p className="font-medium">{rec.name}</p>
+                      <p className="font-medium">
+                        {rec.name}
+                        {!rec.is_active && (
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">(paused)</span>
+                        )}
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         {formatCurrency(Number(rec.amount))} · {rec.frequency} · Day {rec.due_day}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => openRecurringDialog(rec)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      aria-pressed={rec.is_active}
+                      disabled={updateRecurringMutation.isPending}
+                      onClick={() => handleToggleRecurring(rec)}
+                    >
+                      {rec.is_active ? "Active" : "Paused"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Edit ${rec.name}`}
+                      onClick={() => openRecurringDialog(rec)}
+                    >
                       <Edit2 className="h-4 w-4" />
                     </Button>
                     <Button
@@ -360,7 +423,7 @@ export function Settings() {
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Category</DialogTitle>
+            <DialogTitle>{editingCategory ? "Edit Category" : "Add Category"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -384,7 +447,12 @@ export function Settings() {
             <Button variant="outline" onClick={() => setCategoryDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddCategory}>Add Category</Button>
+            <Button
+              onClick={handleSaveCategory}
+              disabled={createCategoryMutation.isPending || updateCategoryMutation.isPending}
+            >
+              {editingCategory ? "Save" : "Add Category"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

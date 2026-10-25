@@ -18,10 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateExpense, useUpdateExpense } from "@/lib/queries";
+import { useCreateCategory, useCreateExpense, useUpdateExpense } from "@/lib/queries";
 import { todayISO } from "@/lib/utils";
 import { Category, Expense, ExpenseCreate, ExpenseUpdate } from "@/types";
 import { useToast } from "@/hooks/use-toast";
+import { Plus } from "lucide-react";
+
+// Sentinel Select value for the "+ Add new category" option
+const NEW_CATEGORY = "__new__";
 
 interface ExpenseFormDialogProps {
   open: boolean;
@@ -47,7 +51,54 @@ export function ExpenseFormDialog({
   const [note, setNote] = useState("");
   const [expenseDate, setExpenseDate] = useState("");
 
+  // Inline "add new category"
+  const createCategory = useCreateCategory();
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState("");
+  const [createdCategory, setCreatedCategory] = useState<Category | null>(null);
+
   const isEditing = !!expense;
+
+  useEffect(() => {
+    setAddingCategory(false);
+    setNewCategoryName("");
+    setNewCategoryIcon("");
+  }, [open]);
+
+  const handleCategoryChange = (value: string) => {
+    if (value === NEW_CATEGORY) {
+      setAddingCategory(true);
+    } else {
+      setCategoryId(value);
+    }
+  };
+
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      toast({ title: "Error", description: "Category name is required", variant: "destructive" });
+      return;
+    }
+    try {
+      const category = await createCategory.mutateAsync({
+        name,
+        icon: newCategoryIcon.trim() || undefined,
+      });
+      setCreatedCategory(category);
+      setCategoryId(category.id);
+      setAddingCategory(false);
+      setNewCategoryName("");
+      setNewCategoryIcon("");
+      toast({ title: "Success", description: `Category "${category.name}" added` });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add category",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     if (expense) {
@@ -117,7 +168,10 @@ export function ExpenseFormDialog({
     }
   };
 
-  const selectedCategory = categories.find((c) => c.id === categoryId);
+  // A just-created category may not be in `categories` until the refetch lands
+  const selectedCategory =
+    categories.find((c) => c.id === categoryId) ??
+    (createdCategory?.id === categoryId ? createdCategory : undefined);
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -154,8 +208,8 @@ export function ExpenseFormDialog({
           {!preselectedCategory && (
             <div className="space-y-2">
               <Label htmlFor="category">Category *</Label>
-              <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger>
+              <Select value={categoryId} onValueChange={handleCategoryChange}>
+                <SelectTrigger id="category">
                   <SelectValue placeholder="Select a category">
                     {selectedCategory && (
                       <span className="flex items-center gap-2">
@@ -174,8 +228,62 @@ export function ExpenseFormDialog({
                       </span>
                     </SelectItem>
                   ))}
+                  <SelectItem value={NEW_CATEGORY} className="border-t text-primary">
+                    <span className="flex items-center gap-2">
+                      <Plus className="h-4 w-4" />
+                      Add new category...
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
+
+              {addingCategory && (
+                <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                  <div className="flex gap-2">
+                    <Input
+                      aria-label="New category icon"
+                      placeholder="🍔"
+                      value={newCategoryIcon}
+                      onChange={(e) => setNewCategoryIcon(e.target.value)}
+                      maxLength={50}
+                      className="w-16"
+                    />
+                    <Input
+                      aria-label="New category name"
+                      placeholder="Category name"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        // Enter adds the category instead of submitting the expense
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleCreateCategory();
+                        }
+                      }}
+                      maxLength={100}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAddingCategory(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleCreateCategory}
+                      disabled={createCategory.isPending}
+                    >
+                      {createCategory.isPending ? "Adding..." : "Add"}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

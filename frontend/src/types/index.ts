@@ -11,6 +11,11 @@ export interface CategoryCreate {
   icon?: string;
 }
 
+export interface CategoryUpdate {
+  name?: string;
+  icon?: string | null;
+}
+
 // Expense types
 export interface Expense {
   id: string;

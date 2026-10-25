@@ -27,10 +27,11 @@ Status legend: `[x]` done and verified · `[~]` done but not fully verified (see
 - [x] `tsc --noEmit` and `npm run build` pass on 14.2.35
 
 ## Phase 1 — Finish missing features
-- [ ] Category editing (`PUT /categories/{id}`): rename + icon. **The model has no color field**; adding one is optional. "Unique per user" becomes possible only after Phase 2. Until then names stay globally unique (case-insensitive).
-- [ ] "+ Add new category" inline in the expense form dropdown
-- [ ] Active/inactive toggle for recurring expenses in the UI (the API already supports `is_active`, and `/stats/upcoming-recurring` already filters inactive items)
-- [ ] Audit React Query invalidation for every mutation (categories → expenses/stats/budgets/recurring, recurring → upcoming)
+*Verified: `tsc --noEmit`, `npm run build`, backend import, schema validation. **Not run against Postgres or clicked through in a browser** (Docker down).*
+- [~] Category editing: `PUT /categories/{id}` (name + icon, trimmed, case-insensitive uniqueness excluding itself) and an Edit button and dialog in Settings. Names are globally unique until Phase 2 makes them per-user. No color column exists, so none was added.
+- [~] "+ Add new category…" option in the expense form dropdown opens an inline name and icon row; the new category is selected automatically
+- [~] Active/Paused toggle on each recurring item in Settings (`aria-pressed`). Paused items are dimmed. The backend already excludes inactive items from `/stats/upcoming-recurring`.
+- [x] Cache invalidation audit: category rename now also refreshes expenses, stats, budgets, recurring and upcoming. Expense changes refresh expenses, stats and budgets. Recurring changes refresh recurring and upcoming. Budget changes refresh budgets and budget summary. Category create/delete refreshes categories (delete only succeeds when the category is unused).
 
 ## Phase 2 — Authentication and data isolation (ASK FIRST)
 - [ ] Propose options; wait for your choice
