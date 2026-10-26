@@ -211,77 +211,75 @@ Done: Phases 0–3. Proposed from here:
 - [x] Smoke suite **green again** on the upgraded production build.
 - Note: `next start` warns with `output: 'standalone'`. It works for e2e, and production will run `node .next/standalone/server.js` (Phase 8).
 
-## Phase F1 — Income and savings goals (approved; data model proposed below, needs your OK before building)
+## Phase F1 — Income and savings goals (approved 2026-10-26, revised to meet your requirements)
 
-### Proposed data model
-All tables follow the existing conventions: UUID PKs, `user_id → users ON DELETE CASCADE`, money `NUMERIC(12,2)` with the shared `MoneyIn`/`Money` validation (> 0, 2 decimals, ≤ 99,999,999.99), dates that can't be in the future (Asia/Dhaka).
+### Requirements check
+| # | Your requirement | First proposal | Revised design |
+|---|---|---|---|
+| 1 | Income: amount, date, source/category (Salary, Freelance, Business, Gift, Other + user-defined), note, same money rules | Free-text `source` | **Changed:** a per-user `income_categories` table, seeded with the 5 defaults, plus user-defined ones (same model and uniqueness as expense categories). Money/date validation reuses `MoneyIn` and the no-future-date rule. |
+| 2 | Recurring income via the existing recurring mechanism + "Mark paid"/due logic | Out of scope | **Changed:** `recurring_expenses` gains `kind` (`expense`/`income`) and an `income_category_id`, so it's one mechanism. **Note: "Mark paid" doesn't exist yet**; today the app only computes due dates and reminders. It's added once, for both kinds: `POST /recurring/{id}/mark-paid` creates the expense or income through the normal validation and stores `last_paid_on`, which moves `next_due` to the next cycle and hides the item from "Upcoming" until then. |
+| 3 | Saved = income − expenses; contributions are allocations, never spending | ✅ same | Unchanged. Contributions live only in `goal_contributions`. Expense totals, charts, budgets and stats never read that table. A test asserts that adding a contribution leaves spending, budgets and Saved unchanged. |
+| 4 | Negative month shows "Overspent by ৳X"; savings rate "—" without income | Partly ("red when negative") | **Clarified:** the API returns `saved` (may be negative) and `savings_rate: null` when income is 0. The UI shows **"Overspent by ৳X"** for negative months and **"—"** for a null rate. Tests cover zero income, zero spending and negative months. |
+| 5 | Goals: name, target, optional deadline, optional icon; archive completed; delete asks and explains | ✅ fields + status | **Clarified:** archiving is offered once a goal is complete (and allowed any time). The delete dialog says: *"Its ৳X of contributions are removed from the goal. This doesn't change your income, expenses or Saved total; the money simply stops being earmarked."* |
+| 6 | Monthly-needed / on-track handle no deadline, past deadline, completed | Only the deadline case | **Changed:** an explicit `state` with five values (see "Computed fields" below). |
+| 7 | Per-user isolation tests; export includes income | Separate income export | **Changed:** the CSV export includes income. A **`Type` column (`Expense`/`Income`) is appended** as the last column, so existing columns keep their position. Isolation tests mirror the expense ones for every new table and endpoint. |
+| 8 | Assistant can read them later | Implied | **Explicit:** cashflow and goal calculations live in `app/services/cashflow.py` and `app/services/goals.py`. API endpoints and the future assistant tools (`get_cashflow`, `get_savings_goals`) call the same functions, so the numbers always match. |
 
-**`incomes`**: money in
-| Column | Type | Notes |
-|---|---|---|
-| id | UUID PK | |
-| user_id | UUID FK | |
-| amount | NUMERIC(12,2) | > 0 |
-| source | VARCHAR(100) | required, free text, e.g. "Salary", "Tuition", "Freelance". The UI suggests the user's previous sources. A separate category table isn't worth it for the handful of sources most people have. |
-| income_date | DATE | default today, not in the future |
-| note | VARCHAR(500) NULL | |
-| created_at / updated_at | TIMESTAMPTZ | |
-| Index | (user_id, income_date) | |
+### Data model
+Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC(12,2)` money via `MoneyIn`/`Money`, no future dates (Asia/Dhaka), case-insensitive names unique per user.
 
-**`savings_goals`**
-| Column | Type | Notes |
-|---|---|---|
-| id | UUID PK | |
-| user_id | UUID FK | |
-| name | VARCHAR(100) | unique per user, case-insensitive (same as categories) |
-| icon | VARCHAR(50) NULL | emoji |
-| target_amount | NUMERIC(12,2) | > 0 |
-| target_date | DATE NULL | optional deadline; must be in the future when set |
-| status | VARCHAR(20) | `active` / `completed` / `archived`, CHECK constraint |
-| created_at / updated_at | TIMESTAMPTZ | |
+**`income_categories`**: id, user_id, name VARCHAR(100), icon VARCHAR(50) NULL, is_default BOOL, created_at. Seeded on registration (and for existing users by the migration): Salary 💼, Freelance 💻, Business 🏪, Gift 🎁, Other ➕. Deleting is blocked while the category is in use, the same as expense categories.
 
-**`goal_contributions`**: money put toward (or taken out of) a goal
-| Column | Type | Notes |
-|---|---|---|
-| id | UUID PK | |
-| goal_id | UUID FK → savings_goals CASCADE | must belong to the same user (checked server-side) |
-| user_id | UUID FK | denormalized so queries filter by user directly, same as other tables |
-| amount | NUMERIC(12,2) | non-zero. Negative = withdrawal, refused if it would take the goal below 0 |
-| contributed_on | DATE | not in the future |
-| note | VARCHAR(200) NULL | |
+**`incomes`**: id, user_id, amount, income_category_id FK, income_date DATE (default today), note VARCHAR(500) NULL, created_at, updated_at. Index (user_id, income_date).
 
-**Computed, never stored** (SQL/Python, reused by the assistant tools):
-- Per goal:
-  - `saved` = sum of contributions
-  - `progress_pct`, `remaining`
-  - `months_left`, and `required_per_month` = remaining ÷ months left (when there's a deadline)
-  - `on_track` = saved ≥ the target pro-rated over the elapsed time between created_at and target_date
-- **Cashflow** for a month:
-  - `income` = sum of incomes
-  - `spent` = sum of expenses
-  - `saved` = income − spent (can be negative)
-  - `savings_rate` = saved ÷ income × 100 (null when income is 0)
-- Goal contributions aren't expenses, so they don't change `spent`. They show where the saved money went, and the UI shows "unallocated savings" = saved − contributions this month.
+**`recurring_expenses`** (extended, not renamed, so existing rows and the API keep working):
+- `kind` VARCHAR(10) NOT NULL DEFAULT 'expense', with a CHECK of `expense|income`
+- `income_category_id` UUID NULL FK
+- `category_id` becomes nullable
+- CHECK: exactly one of `category_id` / `income_category_id`, matching `kind`
+- `last_paid_on` DATE NULL (`last_reminded_at` stays unused)
+- Existing rows become `kind='expense'` with no data loss. The API defaults `kind` to `expense`.
+
+**`savings_goals`**: id, user_id, name VARCHAR(100), icon VARCHAR(50) NULL, target_amount, target_date DATE NULL, status `active|archived` (completion is computed, not stored), created_at, updated_at.
+
+**`goal_contributions`**: id, goal_id FK CASCADE, user_id, amount (non-zero; negative = withdrawal, refused if the goal would go below 0), contributed_on DATE, note VARCHAR(200) NULL, created_at.
+
+### Computed fields (services, shared with the assistant)
+- **Cashflow(period):**
+  - `income`, `spent`, `saved = income − spent`
+  - `savings_rate = saved ÷ income × 100`, or **null** when income = 0
+  - `allocated_to_goals` = contributions in the period
+  - `unallocated = saved − allocated_to_goals`
+- **Goal progress:** `saved`, `remaining = max(target − saved, 0)`, `progress_pct` (capped display at 100, raw value kept), plus `state`:
+  - `completed`: saved ≥ target. `required_per_month = 0`. The UI suggests archiving.
+  - `no_deadline`: `required_per_month = null` and `on_track = null`. The UI shows "No deadline".
+  - `overdue`: the deadline has passed and the goal isn't complete. `required_per_month = remaining` (due now). The UI shows "Deadline passed, ৳X to go".
+  - `on_track` / `behind`: saved compared with the target pro-rated over the time from creation to the deadline. `required_per_month = remaining ÷ months left` (at least 1 month).
 
 ### How it shows up
-- **Dashboard:** a "This month" cashflow row above the charts with **Income / Spent / Saved (savings-rate %)**. Saved is red when negative. Until the first income is added it shows an "Add your income" prompt instead. Below it, a **Goals** card shows up to 3 active goals with progress bars, "৳X of ৳Y", and "৳Z/month needed".
-- **New pages:**
-  - `/income`: list with month filter, add/edit/delete, source suggestions.
-  - `/goals`: goal cards plus an add-contribution dialog.
-  - Navbar: Dashboard, Expenses, Income, Goals, Settings. Phase 6 makes this a mobile bottom nav.
+- **Dashboard:**
+  - A "This month" row: **Income · Spent · Saved** (or **"Overspent by ৳X"**) · **Savings rate** (or "—"). Before the first income is added it shows an "Add your income" prompt.
+  - A Goals card with up to 3 active goals: progress bar, state badge, "৳Z/month needed".
+- **Pages:**
+  - `/income`: list with month filter, add/edit/delete, category select with "+ Add new category…" (same pattern as expenses).
+  - `/goals`: goal cards, add/edit/archive/delete (with the explanation above), add or withdraw contribution.
+  - Settings: an income categories list, and recurring items gain an Expense/Income type.
+  - Upcoming bills: also shows expected income, with a **Mark paid** / **Mark received** button.
 - **API:**
-  - `/incomes` CRUD (paginated, same shape as expenses)
-  - `/goals` CRUD
-  - `/goals/{id}/contributions` (list/add/delete)
+  - `/income-categories` CRUD
+  - `/incomes` CRUD (paginated, filters like expenses)
+  - `/goals` CRUD + `/goals/{id}/contributions`
+  - `/recurring/{id}/mark-paid`
   - `/stats/cashflow?month=YYYY-MM`
-  - `/stats/cashflow/trend?months=6` (for a later in-vs-out chart)
-- **CSV export:** a separate income export, so the existing expense CSV format doesn't change.
-- **Out of scope for now:** recurring income (e.g. auto-salary) and multiple currencies.
+- **Out of scope:** multiple currencies, and splitting one income across goals automatically.
 
 ### Checklist
-- [ ] Migration for the 3 tables + models/schemas/routers, all user-scoped
-- [ ] Cashflow + goal-progress calculations, with tests (including isolation, withdrawal below 0 refused, deadline math)
-- [ ] UI: /income, /goals, dashboard cashflow row + goals card, navbar entries
+- [ ] Migration: 4 new tables + `recurring_expenses` extension + default income categories for existing users
+- [ ] Models/schemas/routers, all user-scoped; services for cashflow and goals
+- [ ] Mark paid for recurring expense and income (creates the record, advances due)
+- [ ] CSV export with the `Type` column
+- [ ] Tests: CRUD, validation, isolation for every new table, cashflow edge cases (no income, negative, contributions don't affect spending/Saved), goal states (completed, no deadline, overdue, on track, behind), withdrawal below 0 refused, mark-paid due advance for weekly/monthly/31st/December
+- [ ] UI: /income, /goals, dashboard cashflow row + goals card, Settings income categories, recurring type + Mark paid; Playwright flow for income → Saved
 
 ## Phase A1 — Assistant backend core (see docs/ASSISTANT_DESIGN.md)
 - [ ] `LLMClient` (OpenRouter via `openai` SDK): fallbacks, `provider` privacy routing, attribution headers, usage/cost parsing, error mapping (402/429/502/503/timeout/mid-stream)
@@ -334,6 +332,10 @@ Partially present: skeletons, toasts, delete confirmations, dark mode.
 - [ ] Clean-state run of everything (fresh DB, migrations from zero, all suites, builds, compose up)
 - [ ] Secret scan (repo + history), auth on every endpoint, CORS and rate limits on, `npm audit`, `pip-audit`
 - [ ] Final report + suggested next features (not built)
+
+## Optional later cleanups (not scheduled)
+- **Tailwind 4** (clears the last 4 moderate, build-time-only `npm audit` findings). Major upgrade: new config format, and shadcn component class changes.
+- **lucide-react 1.x**: major; possible icon renames. Skipped for now.
 
 ## Doesn't apply / adjusted
 - "Change color" when editing categories: there's no color column. Icon (emoji) editing is supported; adding color is an optional extra.

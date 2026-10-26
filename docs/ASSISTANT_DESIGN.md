@@ -257,6 +257,7 @@ A test also asserts that guard 3 fires. CI never gets a real key.
 5. **ZDR only by default.** All four candidates qualify (§3).
 6. **Limits:** `ASSISTANT_GLOBAL_DAILY_BUDGET_USD=1` and `ASSISTANT_DAILY_MESSAGE_LIMIT=20`, both env-configurable. After the eval I'll report the cost per message for the recommended model and suggest final limits.
 7. **Production:** a separate production OpenRouter key with its own limit (added to the pre-deploy checklist).
+8. **If B (`openai/gpt-6-luna`) wins the eval:** it has a single ZDR provider (Azure), so it ships **with a fallback** in `ASSISTANT_FALLBACK_MODELS`: the best-scoring of A or D that has a different ZDR provider.
 
 ## 13. Evaluation results
 
