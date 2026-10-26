@@ -1,5 +1,8 @@
 # Wallet Agent - Expense Tracker
 
+<!-- Replace OWNER/REPO with the GitHub repository path -->
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+
 A manual expense tracking app with clean UX, recurring expense reminders, and data visualization.
 
 ## Tech Stack

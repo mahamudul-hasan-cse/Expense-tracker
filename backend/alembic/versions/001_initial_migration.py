@@ -1,7 +1,7 @@
 """Initial migration
 
 Revision ID: 001
-Revises: 
+Revises:
 Create Date: 2026-01-17
 
 """
@@ -28,7 +28,7 @@ def upgrade() -> None:
         sa.Column('is_default', sa.Boolean(), server_default='false'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()'))
     )
-    
+
     # Create expenses table
     op.create_table(
         'expenses',
@@ -41,7 +41,7 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()')),
         sa.CheckConstraint('amount > 0', name='check_amount_positive')
     )
-    
+
     # Create recurring_expenses table
     op.create_table(
         'recurring_expenses',
@@ -58,12 +58,12 @@ def upgrade() -> None:
         sa.CheckConstraint("frequency IN ('weekly', 'monthly')", name='check_frequency_valid'),
         sa.CheckConstraint('due_day >= 1 AND due_day <= 31', name='check_due_day_range')
     )
-    
+
     # Create indexes
     op.create_index('idx_expenses_date', 'expenses', ['expense_date'], postgresql_ops={'expense_date': 'DESC'})
     op.create_index('idx_expenses_category', 'expenses', ['category_id'])
     op.create_index('idx_expenses_date_category', 'expenses', ['expense_date', 'category_id'])
-    
+
     # Seed default categories
     op.execute("""
         INSERT INTO categories (name, icon, is_default) VALUES

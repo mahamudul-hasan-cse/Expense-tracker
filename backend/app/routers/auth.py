@@ -70,10 +70,7 @@ def _user_from_refresh_token(db: Session, token: str | None) -> User | None:
 def register(request: Request, data: RegisterRequest, response: Response, db: Session = Depends(get_db)):
     """Create an account (with the default categories) and sign in."""
     if get_user_by_email(db, data.email):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email already exists"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="An account with this email already exists")
     user = create_user(db, data.email, data.password)
     db.commit()
     db.refresh(user)
@@ -89,16 +86,15 @@ def login(request: Request, data: LoginRequest, response: Response, db: Session 
     if not login_attempts_allowed(email_key):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many failed sign-in attempts for this account. Please try again later."
+            detail="Too many failed sign-in attempts for this account. Please try again later.",
         )
 
     user = get_user_by_email(db, data.email)
-    if not verify_password(user.password_hash if user else None, data.password):
+    # Always verify (against a dummy hash when the user doesn't exist) so timing is equal
+    password_ok = verify_password(user.password_hash if user else None, data.password)
+    if user is None or not password_ok:
         record_failed_login(email_key)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     return _issue_tokens(response, user)
 
 

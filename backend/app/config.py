@@ -1,8 +1,8 @@
+from functools import lru_cache
 from typing import Literal, Optional
 
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from functools import lru_cache
 
 # Only usable outside production; production must set SECRET_KEY explicitly
 DEV_SECRET_KEY = "dev-insecure-secret-key-change-me-in-production"
@@ -63,7 +63,9 @@ class Settings(BaseSettings):
 
         problems = []
         if self.secret_key == DEV_SECRET_KEY:
-            problems.append("SECRET_KEY must be set (generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\")")
+            problems.append(
+                "SECRET_KEY must be set (generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\")"
+            )
         elif len(self.secret_key) < 32:
             problems.append("SECRET_KEY must be at least 32 characters")
         if self.database_url == DEV_DATABASE_URL:

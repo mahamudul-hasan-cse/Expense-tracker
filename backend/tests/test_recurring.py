@@ -10,25 +10,26 @@ API = "/api/v1"
 
 # --- Due-date rules (pure function) ------------------------------------------
 
+
 @pytest.mark.parametrize(
     "frequency, due_day, today, expected",
     [
         # weekly: 1=Monday … 7=Sunday; 2026-10-26 is a Monday
-        ("weekly", 1, date(2026, 10, 26), date(2026, 10, 26)),   # due today
+        ("weekly", 1, date(2026, 10, 26), date(2026, 10, 26)),  # due today
         ("weekly", 2, date(2026, 10, 26), date(2026, 10, 27)),
         ("weekly", 7, date(2026, 10, 26), date(2026, 11, 1)),
-        ("weekly", 1, date(2026, 10, 27), date(2026, 11, 2)),    # just missed -> next week
-        ("weekly", 5, date(2026, 12, 30), date(2027, 1, 1)),     # across New Year
+        ("weekly", 1, date(2026, 10, 27), date(2026, 11, 2)),  # just missed -> next week
+        ("weekly", 5, date(2026, 12, 30), date(2027, 1, 1)),  # across New Year
         # monthly
-        ("monthly", 5, date(2026, 10, 5), date(2026, 10, 5)),    # due today
+        ("monthly", 5, date(2026, 10, 5), date(2026, 10, 5)),  # due today
         ("monthly", 5, date(2026, 10, 1), date(2026, 10, 5)),
-        ("monthly", 5, date(2026, 10, 6), date(2026, 11, 5)),    # passed -> next month
-        ("monthly", 31, date(2026, 2, 10), date(2026, 2, 28)),   # 31st in February (non-leap)
-        ("monthly", 31, date(2028, 2, 10), date(2028, 2, 29)),   # leap year
-        ("monthly", 31, date(2026, 4, 30), date(2026, 4, 30)),   # 30-day month, last day = due today
+        ("monthly", 5, date(2026, 10, 6), date(2026, 11, 5)),  # passed -> next month
+        ("monthly", 31, date(2026, 2, 10), date(2026, 2, 28)),  # 31st in February (non-leap)
+        ("monthly", 31, date(2028, 2, 10), date(2028, 2, 29)),  # leap year
+        ("monthly", 31, date(2026, 4, 30), date(2026, 4, 30)),  # 30-day month, last day = due today
         ("monthly", 31, date(2026, 1, 31), date(2026, 1, 31)),
-        ("monthly", 30, date(2026, 1, 31), date(2026, 2, 28)),   # passed in Jan -> clamped Feb
-        ("monthly", 5, date(2026, 12, 6), date(2027, 1, 5)),     # December rollover
+        ("monthly", 30, date(2026, 1, 31), date(2026, 2, 28)),  # passed in Jan -> clamped Feb
+        ("monthly", 5, date(2026, 12, 6), date(2027, 1, 5)),  # December rollover
         ("monthly", 31, date(2026, 12, 31), date(2026, 12, 31)),
         ("monthly", 1, date(2026, 12, 2), date(2027, 1, 1)),
     ],
@@ -39,8 +40,15 @@ def test_calculate_next_due(frequency, due_day, today, expected):
 
 # --- API ---------------------------------------------------------------------
 
+
 def _create(client, headers, **overrides):
-    body = {"name": "Wifi", "amount": 800, "category_id": first_category_id(client, headers), "frequency": "monthly", "due_day": 5}
+    body = {
+        "name": "Wifi",
+        "amount": 800,
+        "category_id": first_category_id(client, headers),
+        "frequency": "monthly",
+        "due_day": 5,
+    }
     body.update(overrides)
     return client.post(f"{API}/recurring", json=body, headers=headers)
 
@@ -80,14 +88,24 @@ def test_update_rules(client, auth_headers):
     assert client.put(url, json={"frequency": "weekly"}, headers=auth_headers).status_code == 400
     weekly = client.put(url, json={"frequency": "weekly", "due_day": 3}, headers=auth_headers)
     assert weekly.status_code == 200 and weekly.json()["frequency"] == "weekly"
-    assert client.put(url, json={"category_id": "00000000-0000-0000-0000-000000000000"}, headers=auth_headers).status_code == 400
-    assert client.put(f"{API}/recurring/00000000-0000-0000-0000-000000000000", json={"name": "x"}, headers=auth_headers).status_code == 404
+    assert (
+        client.put(url, json={"category_id": "00000000-0000-0000-0000-000000000000"}, headers=auth_headers).status_code
+        == 400
+    )
+    assert (
+        client.put(
+            f"{API}/recurring/00000000-0000-0000-0000-000000000000", json={"name": "x"}, headers=auth_headers
+        ).status_code
+        == 404
+    )
 
 
 def test_upcoming_window_and_paused_items(client, auth_headers):
     today = date.today()
     due_today = _create(client, auth_headers, name="Today", due_day=today.isoweekday(), frequency="weekly").json()
-    in_three = _create(client, auth_headers, name="Soon", frequency="weekly", due_day=(today + timedelta(days=3)).isoweekday()).json()
+    in_three = _create(
+        client, auth_headers, name="Soon", frequency="weekly", due_day=(today + timedelta(days=3)).isoweekday()
+    ).json()
     paused = _create(client, auth_headers, name="Paused", frequency="weekly", due_day=today.isoweekday()).json()
     client.put(f"{API}/recurring/{paused['id']}", json={"is_active": False}, headers=auth_headers)
 

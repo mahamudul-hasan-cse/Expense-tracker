@@ -30,7 +30,10 @@ import {
 } from "./auth-token";
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  constructor(
+    message: string,
+    public status: number
+  ) {
     super(message);
   }
 }
@@ -137,8 +140,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  deleteCategory: (id: string) =>
-    request<void>(`/categories/${id}`, { method: "DELETE" }),
+  deleteCategory: (id: string) => request<void>(`/categories/${id}`, { method: "DELETE" }),
 
   // Expenses
   getExpenses: (params?: {
@@ -174,8 +176,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  deleteExpense: (id: string) =>
-    request<void>(`/expenses/${id}`, { method: "DELETE" }),
+  deleteExpense: (id: string) => request<void>(`/expenses/${id}`, { method: "DELETE" }),
 
   // Recurring
   getRecurring: () => request<RecurringListResponse>("/recurring"),
@@ -192,8 +193,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  deleteRecurring: (id: string) =>
-    request<void>(`/recurring/${id}`, { method: "DELETE" }),
+  deleteRecurring: (id: string) => request<void>(`/recurring/${id}`, { method: "DELETE" }),
 
   // Stats
   getStats: (period: "weekly" | "monthly", date?: string) => {
@@ -250,6 +250,5 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  deleteBudget: (id: string) =>
-    request<void>(`/budgets/${id}`, { method: "DELETE" }),
+  deleteBudget: (id: string) => request<void>(`/budgets/${id}`, { method: "DELETE" }),
 };

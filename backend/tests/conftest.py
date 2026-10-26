@@ -4,6 +4,7 @@ Set TEST_DATABASE_URL to point at it (default: wallet_agent_test on localhost).
 The schema is rebuilt from the Alembic migrations once per session, and every
 table is truncated between tests.
 """
+
 import os
 from pathlib import Path
 

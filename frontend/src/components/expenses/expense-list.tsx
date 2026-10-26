@@ -32,7 +32,7 @@ import { buildExpenseQuery } from "./expense-filters";
 
 export function ExpenseList() {
   const { toast } = useToast();
-  
+
   // Filters
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [startDate, setStartDate] = useState("");
@@ -40,7 +40,7 @@ export function ExpenseList() {
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearch = useDeferredValue(searchQuery);
   const [page, setPage] = useState(1);
-  
+
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -66,7 +66,7 @@ export function ExpenseList() {
 
   const handleDelete = async () => {
     if (!deletingExpense) return;
-    
+
     deleteExpenseMutation.mutate(deletingExpense.id, {
       onSuccess: () => {
         toast({
@@ -216,9 +216,7 @@ export function ExpenseList() {
                   <div className="flex items-center gap-4">
                     <span className="text-2xl">{expense.category.icon}</span>
                     <div>
-                      <p className="font-medium">
-                        {formatCurrency(Number(expense.amount))}
-                      </p>
+                      <p className="font-medium">{formatCurrency(Number(expense.amount))}</p>
                       <p className="text-sm text-muted-foreground">
                         {expense.category.name}
                         {expense.note && ` · ${expense.note}`}
@@ -230,11 +228,7 @@ export function ExpenseList() {
                       {formatDate(expense.expense_date)}
                     </p>
                     <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(expense)}
-                      >
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(expense)}>
                         <Edit2 className="h-4 w-4" />
                       </Button>
                       <Button
@@ -253,9 +247,7 @@ export function ExpenseList() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-12">
-              No expenses found
-            </p>
+            <p className="text-center text-muted-foreground py-12">No expenses found</p>
           )}
         </CardContent>
       </Card>
@@ -305,10 +297,11 @@ export function ExpenseList() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeletingExpense(null)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+            <AlertDialogCancel onClick={() => setDeletingExpense(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

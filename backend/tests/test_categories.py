@@ -34,7 +34,12 @@ def test_update_category(client, auth_headers):
     assert renamed["name"] == "Fitness" and renamed["icon"] == "🏋"
     # Renaming to its own name with different case is fine
     assert client.put(url, json={"name": "FITNESS"}, headers=auth_headers).status_code == 200
-    assert client.put(f"{API}/categories/00000000-0000-0000-0000-000000000000", json={"name": "x"}, headers=auth_headers).status_code == 404
+    assert (
+        client.put(
+            f"{API}/categories/00000000-0000-0000-0000-000000000000", json={"name": "x"}, headers=auth_headers
+        ).status_code
+        == 404
+    )
 
 
 def test_default_categories_cannot_be_deleted(client, auth_headers):
@@ -54,7 +59,9 @@ def test_delete_blocked_while_in_use(client, auth_headers):
         headers=auth_headers,
     ).json()
     bud = client.post(
-        f"{API}/budgets", json={"category_id": gym["id"], "amount": 100, "month": today.month, "year": today.year}, headers=auth_headers
+        f"{API}/budgets",
+        json={"category_id": gym["id"], "amount": 100, "month": today.month, "year": today.year},
+        headers=auth_headers,
     ).json()
 
     res = client.delete(f"{API}/categories/{gym['id']}", headers=auth_headers)

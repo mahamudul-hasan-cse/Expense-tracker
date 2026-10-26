@@ -1,4 +1,5 @@
 """User A must never be able to read, edit or delete user B's data."""
+
 from datetime import date
 
 import pytest
@@ -20,7 +21,13 @@ def alice_data(client, auth_headers):
     ).json()
     recurring = client.post(
         f"{API}/recurring",
-        json={"name": "Alice Rent", "amount": 500, "category_id": category["id"], "frequency": "monthly", "due_day": today.day},
+        json={
+            "name": "Alice Rent",
+            "amount": 500,
+            "category_id": category["id"],
+            "frequency": "monthly",
+            "due_day": today.day,
+        },
         headers=auth_headers,
     ).json()
     budget = client.post(
@@ -63,11 +70,17 @@ def test_lists_only_show_own_data(client, alice_data, other_headers):
 def test_cannot_edit_or_delete_other_users_records(client, alice_data, auth_headers, other_headers):
     ids = {k: v["id"] for k, v in alice_data.items()}
 
-    assert client.put(f"{API}/categories/{ids['category']}", json={"name": "Hacked"}, headers=other_headers).status_code == 404
+    assert (
+        client.put(f"{API}/categories/{ids['category']}", json={"name": "Hacked"}, headers=other_headers).status_code
+        == 404
+    )
     assert client.delete(f"{API}/categories/{ids['category']}", headers=other_headers).status_code == 404
     assert client.put(f"{API}/expenses/{ids['expense']}", json={"amount": 1}, headers=other_headers).status_code == 404
     assert client.delete(f"{API}/expenses/{ids['expense']}", headers=other_headers).status_code == 404
-    assert client.put(f"{API}/recurring/{ids['recurring']}", json={"is_active": False}, headers=other_headers).status_code == 404
+    assert (
+        client.put(f"{API}/recurring/{ids['recurring']}", json={"is_active": False}, headers=other_headers).status_code
+        == 404
+    )
     assert client.delete(f"{API}/recurring/{ids['recurring']}", headers=other_headers).status_code == 404
     assert client.put(f"{API}/budgets/{ids['budget']}", json={"amount": 1}, headers=other_headers).status_code == 404
     assert client.delete(f"{API}/budgets/{ids['budget']}", headers=other_headers).status_code == 404
@@ -82,25 +95,41 @@ def test_cannot_edit_or_delete_other_users_records(client, alice_data, auth_head
 def test_cannot_use_other_users_category(client, alice_data, other_headers):
     alice_category = alice_data["category"]["id"]
     today = date.today()
-    assert client.post(
-        f"{API}/expenses", json={"amount": 10, "category_id": alice_category}, headers=other_headers
-    ).status_code == 400
-    assert client.post(
-        f"{API}/recurring",
-        json={"name": "x", "amount": 10, "category_id": alice_category, "frequency": "monthly", "due_day": 1},
-        headers=other_headers,
-    ).status_code == 400
-    assert client.post(
-        f"{API}/budgets",
-        json={"category_id": alice_category, "amount": 10, "month": today.month, "year": today.year},
-        headers=other_headers,
-    ).status_code == 400
+    assert (
+        client.post(
+            f"{API}/expenses", json={"amount": 10, "category_id": alice_category}, headers=other_headers
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            f"{API}/recurring",
+            json={"name": "x", "amount": 10, "category_id": alice_category, "frequency": "monthly", "due_day": 1},
+            headers=other_headers,
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            f"{API}/budgets",
+            json={"category_id": alice_category, "amount": 10, "month": today.month, "year": today.year},
+            headers=other_headers,
+        ).status_code
+        == 400
+    )
 
     # Moving one's own expense into someone else's category is also refused
     own = client.post(
-        f"{API}/expenses", json={"amount": 5, "category_id": first_category_id(client, other_headers)}, headers=other_headers
+        f"{API}/expenses",
+        json={"amount": 5, "category_id": first_category_id(client, other_headers)},
+        headers=other_headers,
     ).json()
-    assert client.put(f"{API}/expenses/{own['id']}", json={"category_id": alice_category}, headers=other_headers).status_code == 400
+    assert (
+        client.put(
+            f"{API}/expenses/{own['id']}", json={"category_id": alice_category}, headers=other_headers
+        ).status_code
+        == 400
+    )
 
 
 def test_category_names_are_unique_per_user_not_globally(client, alice_data, auth_headers, other_headers):

@@ -25,6 +25,8 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "httpx>=0.25,<0.28",
     "pytest-cov>=5",
+    "ruff>=0.6",
+    "mypy>=1.11",
 ]
 
 [build-system]
@@ -40,3 +42,36 @@ addopts = "--cov=app --cov-report=term-missing:skip-covered --cov-fail-under=80"
 
 [tool.coverage.run]
 source = ["app"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, import sorting, bugbear
+select = ["E", "F", "W", "I", "B"]
+ignore = [
+    "E501",  # long lines: the formatter handles wrapping; long test/SQL lines are fine
+    "B008",  # FastAPI's Depends()/Query() in argument defaults is the intended pattern
+]
+
+[tool.ruff.lint.isort]
+# The local alembic/ folder would otherwise make ruff treat the package as first-party
+known-third-party = ["alembic"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/conftest.py" = ["E402"]  # env vars must be set before importing the app
+
+[tool.ruff.format]
+quote-style = "preserve"
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["app"]
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true

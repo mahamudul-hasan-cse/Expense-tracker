@@ -46,7 +46,12 @@ describe("ExpenseFormDialog", () => {
     await user.type(screen.getByLabelText(/Amount/), "80");
     await user.click(screen.getByRole("button", { name: "Save Expense" }));
     expect(createExpense).not.toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive", description: "Amount and category are required" }));
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variant: "destructive",
+        description: "Amount and category are required",
+      })
+    );
   });
 
   it("creates an expense with the preselected category and today's Dhaka date", async () => {
@@ -82,7 +87,12 @@ describe("ExpenseFormDialog", () => {
 
     expect(updateExpense).toHaveBeenCalledWith({
       id: "e1",
-      data: expect.objectContaining({ amount: 350, category_id: "c2", note: null, expense_date: "2026-01-17" }),
+      data: expect.objectContaining({
+        amount: 350,
+        category_id: "c2",
+        note: null,
+        expense_date: "2026-01-17",
+      }),
     });
   });
 
@@ -92,7 +102,9 @@ describe("ExpenseFormDialog", () => {
     await user.type(screen.getByLabelText(/Amount/), "80");
     await user.click(screen.getByRole("button", { name: "Save Expense" }));
 
-    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive", description: "Category not found" }));
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "destructive", description: "Category not found" })
+    );
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/Amount/)).toHaveValue(80);
   });

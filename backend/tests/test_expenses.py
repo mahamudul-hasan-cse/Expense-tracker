@@ -20,6 +20,7 @@ def add(client, headers, amount, category_id, note=None, expense_date=None):
 
 # --- Money validation --------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "amount, status",
     [
@@ -28,8 +29,8 @@ def add(client, headers, amount, category_id, note=None, expense_date=None):
         (99_999_999.99, 201),
         (0, 422),
         (-5, 422),
-        (1.234, 422),            # more than 2 decimals
-        (100_000_000, 422),      # above the max
+        (1.234, 422),  # more than 2 decimals
+        (100_000_000, 422),  # above the max
         ("abc", 422),
     ],
 )
@@ -48,7 +49,9 @@ def test_amount_is_returned_as_number_with_2dp_precision(client, auth_headers):
 def test_future_date_rejected_today_default(client, auth_headers):
     cat = first_category_id(client, auth_headers)
     tomorrow = date.today() + timedelta(days=1)
-    res = client.post(f"{API}/expenses", json={"amount": 1, "category_id": cat, "expense_date": str(tomorrow)}, headers=auth_headers)
+    res = client.post(
+        f"{API}/expenses", json={"amount": 1, "category_id": cat, "expense_date": str(tomorrow)}, headers=auth_headers
+    )
     assert res.status_code == 422
     assert "future" in res.json()["error"]["message"]
     assert add(client, auth_headers, 1, cat)["expense_date"] == str(date.today())
@@ -56,16 +59,26 @@ def test_future_date_rejected_today_default(client, auth_headers):
 
 def test_note_max_length(client, auth_headers):
     cat = first_category_id(client, auth_headers)
-    assert client.post(f"{API}/expenses", json={"amount": 1, "category_id": cat, "note": "x" * 501}, headers=auth_headers).status_code == 422
+    assert (
+        client.post(
+            f"{API}/expenses", json={"amount": 1, "category_id": cat, "note": "x" * 501}, headers=auth_headers
+        ).status_code
+        == 422
+    )
     add(client, auth_headers, 1, cat, note="x" * 500)
 
 
 def test_unknown_category_rejected(client, auth_headers):
-    res = client.post(f"{API}/expenses", json={"amount": 1, "category_id": "00000000-0000-0000-0000-000000000000"}, headers=auth_headers)
+    res = client.post(
+        f"{API}/expenses",
+        json={"amount": 1, "category_id": "00000000-0000-0000-0000-000000000000"},
+        headers=auth_headers,
+    )
     assert res.status_code == 400
 
 
 # --- Update / delete ---------------------------------------------------------
+
 
 def test_update_rules(client, auth_headers):
     cat = first_category_id(client, auth_headers)
@@ -74,7 +87,10 @@ def test_update_rules(client, auth_headers):
 
     assert client.put(url, json={}, headers=auth_headers).status_code == 400
     assert client.put(url, json={"amount": None}, headers=auth_headers).status_code == 400
-    assert client.put(url, json={"expense_date": str(date.today() + timedelta(days=1))}, headers=auth_headers).status_code == 422
+    assert (
+        client.put(url, json={"expense_date": str(date.today() + timedelta(days=1))}, headers=auth_headers).status_code
+        == 422
+    )
     cleared = client.put(url, json={"note": None}, headers=auth_headers)
     assert cleared.status_code == 200 and cleared.json()["note"] is None
     assert client.put(url, json={"amount": 99.99}, headers=auth_headers).json()["amount"] == 99.99
@@ -89,6 +105,7 @@ def test_delete_then_404(client, auth_headers):
 
 
 # --- Listing: filters, search, sort, pagination ------------------------------
+
 
 @pytest.fixture
 def seeded(client, auth_headers):
@@ -109,8 +126,13 @@ def _list(client, headers, **params):
 
 def test_filters(client, auth_headers, seeded):
     cats, today = seeded
-    assert {e["note"] for e in _list(client, auth_headers, category_id=cats["Rickshaw"])["expenses"]} == {"campus", "home_trip"}
-    in_range = _list(client, auth_headers, start_date=str(today - timedelta(days=10)), end_date=str(today - timedelta(days=3)))
+    assert {e["note"] for e in _list(client, auth_headers, category_id=cats["Rickshaw"])["expenses"]} == {
+        "campus",
+        "home_trip",
+    }
+    in_range = _list(
+        client, auth_headers, start_date=str(today - timedelta(days=10)), end_date=str(today - timedelta(days=3))
+    )
     assert {e["note"] for e in in_range["expenses"]} == {"monthly wifi", "lunch 100% spicy"}
 
 

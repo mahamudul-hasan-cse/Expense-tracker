@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency } from "@/lib/utils";
-import { Budget, Category } from "@/types";
+import { Budget } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit2, Trash2, Target } from "lucide-react";
 import {
@@ -72,8 +72,18 @@ export function BudgetSettings() {
   );
 
   const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
   ];
 
   const years = Array.from({ length: 5 }, (_, i) => today.getFullYear() - 2 + i);
@@ -106,7 +116,11 @@ export function BudgetSettings() {
             setDialogOpen(false);
           },
           onError: () => {
-            toast({ title: "Error", description: "Failed to update budget", variant: "destructive" });
+            toast({
+              title: "Error",
+              description: "Failed to update budget",
+              variant: "destructive",
+            });
           },
         }
       );
@@ -162,27 +176,42 @@ export function BudgetSettings() {
             <CardTitle className="text-lg">Monthly Budgets</CardTitle>
           </div>
           <div className="flex items-center gap-2">
-            <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
+            <Select
+              value={selectedMonth.toString()}
+              onValueChange={(v) => setSelectedMonth(parseInt(v))}
+            >
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {months.map((month, i) => (
-                  <SelectItem key={i} value={(i + 1).toString()}>{month}</SelectItem>
+                  <SelectItem key={i} value={(i + 1).toString()}>
+                    {month}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+            <Select
+              value={selectedYear.toString()}
+              onValueChange={(v) => setSelectedYear(parseInt(v))}
+            >
               <SelectTrigger className="w-24">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {years.map((year) => (
-                  <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Button size="sm" onClick={() => openDialog()} className="gap-1" disabled={availableCategories.length === 0}>
+            <Button
+              size="sm"
+              onClick={() => openDialog()}
+              className="gap-1"
+              disabled={availableCategories.length === 0}
+            >
               <Plus className="h-4 w-4" />
               Add Budget
             </Button>
@@ -201,7 +230,13 @@ export function BudgetSettings() {
                       <span className="font-medium">{budget.category.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={budget.percentage > 100 ? "text-destructive font-semibold" : "text-muted-foreground"}>
+                      <span
+                        className={
+                          budget.percentage > 100
+                            ? "text-destructive font-semibold"
+                            : "text-muted-foreground"
+                        }
+                      >
                         {formatCurrency(budget.spent)} / {formatCurrency(budget.amount)}
                       </span>
                       <Button variant="ghost" size="icon" onClick={() => openDialog(budget)}>
@@ -221,7 +256,13 @@ export function BudgetSettings() {
                   </div>
                   <Progress
                     value={Math.min(budget.percentage, 100)}
-                    className={budget.percentage > 90 ? "[&>div]:bg-destructive" : budget.percentage > 75 ? "[&>div]:bg-yellow-500" : ""}
+                    className={
+                      budget.percentage > 90
+                        ? "[&>div]:bg-destructive"
+                        : budget.percentage > 75
+                          ? "[&>div]:bg-yellow-500"
+                          : ""
+                    }
                   />
                   <p className="text-xs text-muted-foreground text-right">
                     {budget.percentage.toFixed(1)}% used
@@ -284,8 +325,13 @@ export function BudgetSettings() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={createBudgetMutation.isPending || updateBudgetMutation.isPending}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={createBudgetMutation.isPending || updateBudgetMutation.isPending}
+            >
               {editingBudget ? "Update" : "Create"}
             </Button>
           </DialogFooter>
@@ -298,12 +344,16 @@ export function BudgetSettings() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Budget</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the budget for {deletingBudget?.category.name}? This action cannot be undone.
+              Are you sure you want to delete the budget for {deletingBudget?.category.name}? This
+              action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDeletingBudget(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

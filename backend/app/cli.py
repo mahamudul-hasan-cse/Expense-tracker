@@ -5,6 +5,7 @@
 Sets (and optionally changes the email of) an existing account, e.g. the owner
 account created by the add_users_and_ownership migration.
 """
+
 import argparse
 import getpass
 import sys

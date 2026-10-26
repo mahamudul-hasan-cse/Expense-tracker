@@ -15,7 +15,11 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   if (status !== "authenticated") {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center" role="status" aria-label="Loading">
+      <div
+        className="flex min-h-[60vh] items-center justify-center"
+        role="status"
+        aria-label="Loading"
+      >
         <LoadingSpinner />
       </div>
     );

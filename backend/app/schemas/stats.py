@@ -1,7 +1,8 @@
-from pydantic import BaseModel
 from datetime import date
-from decimal import Decimal
-from typing import Optional, Literal
+from typing import Literal, Optional
+
+from pydantic import BaseModel
+
 from app.schemas.types import Money
 
 

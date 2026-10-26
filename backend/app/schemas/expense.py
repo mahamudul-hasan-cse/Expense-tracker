@@ -1,11 +1,12 @@
-from pydantic import BaseModel, Field, field_validator, condecimal
-from uuid import UUID
 from datetime import date, datetime
-from decimal import Decimal
-from typing import Optional, Annotated
+from typing import Optional
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator
+
 from app.schemas.category import CategoryResponse
-from app.schemas.types import Money, MoneyIn
 from app.schemas.pagination import PaginationInfo
+from app.schemas.types import Money, MoneyIn
 from app.timeutil import today as app_today
 
 

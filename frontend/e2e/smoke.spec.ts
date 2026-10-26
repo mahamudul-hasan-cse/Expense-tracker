@@ -73,6 +73,8 @@ test("wrong password shows an error and stays on login", async ({ page }) => {
   await page.getByLabel("Password").fill("definitely-wrong");
   await page.getByRole("button", { name: "Sign in" }).click();
   // Next.js renders its own empty role="alert" route announcer, so match by text
-  await expect(page.getByRole("alert").filter({ hasText: "Invalid email or password" })).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Invalid email or password" })
+  ).toBeVisible();
   await expect(page).toHaveURL(/\/login/);
 });

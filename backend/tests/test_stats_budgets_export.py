@@ -23,6 +23,7 @@ def add(client, headers, amount, category_id, when, note=None):
 
 # --- Stats -------------------------------------------------------------------
 
+
 def test_monthly_summary_totals_and_breakdown(client, auth_headers, cats):
     ref = date(2026, 3, 15)
     add(client, auth_headers, 100, cats["Rickshaw"], date(2026, 3, 1))
@@ -62,16 +63,25 @@ def test_december_summary_and_empty_period(client, auth_headers):
 
 # --- Budgets -----------------------------------------------------------------
 
+
 def test_budget_spent_percentage_and_summary(client, auth_headers, cats):
     add(client, auth_headers, 400, cats["Rickshaw"], date(2026, 3, 2))
     add(client, auth_headers, 100, cats["Rickshaw"], date(2026, 3, 31))
     add(client, auth_headers, 700, cats["Rickshaw"], date(2026, 4, 1))  # other month
     add(client, auth_headers, 60, cats["Random"], date(2026, 3, 5))
 
-    r = client.post(f"{API}/budgets", json={"category_id": cats["Rickshaw"], "amount": 1000, "month": 3, "year": 2026}, headers=auth_headers)
+    r = client.post(
+        f"{API}/budgets",
+        json={"category_id": cats["Rickshaw"], "amount": 1000, "month": 3, "year": 2026},
+        headers=auth_headers,
+    )
     assert r.status_code == 201
     assert (r.json()["spent"], r.json()["percentage"]) == (500, 50.0)
-    client.post(f"{API}/budgets", json={"category_id": cats["Random"], "amount": 50, "month": 3, "year": 2026}, headers=auth_headers)
+    client.post(
+        f"{API}/budgets",
+        json={"category_id": cats["Random"], "amount": 50, "month": 3, "year": 2026},
+        headers=auth_headers,
+    )
 
     summary = client.get(f"{API}/budgets/summary?month=3&year=2026", headers=auth_headers).json()
     assert summary["total_budget"] == 1050 and summary["total_spent"] == 560
@@ -86,7 +96,12 @@ def test_budget_rules(client, auth_headers, cats):
     assert client.post(f"{API}/budgets", json=body, headers=auth_headers).status_code == 400  # duplicate month
     for bad in ({"amount": 0}, {"month": 13}, {"year": 2019}, {"amount": 1.001}):
         assert client.post(f"{API}/budgets", json={**body, **bad}, headers=auth_headers).status_code == 422
-    assert client.post(f"{API}/budgets", json={**body, "category_id": "00000000-0000-0000-0000-000000000000"}, headers=auth_headers).status_code == 400
+    assert (
+        client.post(
+            f"{API}/budgets", json={**body, "category_id": "00000000-0000-0000-0000-000000000000"}, headers=auth_headers
+        ).status_code
+        == 400
+    )
 
     url = f"{API}/budgets/{created['id']}"
     assert client.put(url, json={"amount": 250}, headers=auth_headers).json()["amount"] == 250
@@ -97,12 +112,17 @@ def test_budget_rules(client, auth_headers, cats):
 
 def test_budget_defaults_to_current_month(client, auth_headers, cats):
     today = date.today()
-    client.post(f"{API}/budgets", json={"category_id": cats["Random"], "amount": 10, "month": today.month, "year": today.year}, headers=auth_headers)
+    client.post(
+        f"{API}/budgets",
+        json={"category_id": cats["Random"], "amount": 10, "month": today.month, "year": today.year},
+        headers=auth_headers,
+    )
     assert len(client.get(f"{API}/budgets", headers=auth_headers).json()["budgets"]) == 1
     assert client.get(f"{API}/budgets/summary", headers=auth_headers).json()["total_budget"] == 10
 
 
 # --- CSV export --------------------------------------------------------------
+
 
 def test_csv_export(client, auth_headers, cats):
     add(client, auth_headers, 350, cats["Random"], date(2026, 1, 17), note='Lunch, "Chillox"')
@@ -122,7 +142,8 @@ def test_csv_export(client, auth_headers, cats):
 
 
 def test_csv_export_validates_range(client, auth_headers):
-    assert client.get(f"{API}/export/csv?start_date=2026-02-01&end_date=2026-01-01", headers=auth_headers).status_code == 400
+    assert (
+        client.get(f"{API}/export/csv?start_date=2026-02-01&end_date=2026-01-01", headers=auth_headers).status_code
+        == 400
+    )
     assert client.get(f"{API}/export/csv?start_date=2026-02-01", headers=auth_headers).status_code == 422
-
-

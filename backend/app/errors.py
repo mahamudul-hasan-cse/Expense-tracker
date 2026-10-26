@@ -4,6 +4,7 @@ Every error body has the same shape:
     {"error": {"code": "not_found", "message": "Expense not found",
                "details": [...] | null, "request_id": "..."}}
 """
+
 import logging
 from http import HTTPStatus
 
@@ -48,16 +49,20 @@ def error_response(status_code: int, message: str, details=None, headers=None) -
     )
 
 
-async def _http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+async def _http_exception(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, StarletteHTTPException)
     message = exc.detail if isinstance(exc.detail, str) else HTTPStatus(exc.status_code).phrase
     return error_response(exc.status_code, message, headers=getattr(exc, "headers", None))
 
 
-async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def _validation_error(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, RequestValidationError)
     details = [
         {
             # e.g. ["body", "amount"] -> "amount"; keep "query.page" style for non-body params
-            "field": ".".join(str(p) for p in err["loc"][1:]) if err["loc"][:1] == ("body",) else ".".join(str(p) for p in err["loc"]),
+            "field": ".".join(str(p) for p in err["loc"][1:])
+            if err["loc"][:1] == ("body",)
+            else ".".join(str(p) for p in err["loc"]),
             "message": err["msg"].removeprefix("Value error, "),
         }
         for err in exc.errors()
@@ -66,13 +71,15 @@ async def _validation_error(request: Request, exc: RequestValidationError) -> JS
     return error_response(422, message or "Invalid request", details)
 
 
-async def _integrity_error(request: Request, exc: IntegrityError) -> JSONResponse:
+async def _integrity_error(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, IntegrityError)
     # Usually a race on a unique constraint that the routers already check for
     logger.warning("integrity error", extra={"path": request.url.path, "error": str(exc.orig)})
     return error_response(409, "This change conflicts with existing data")
 
 
-async def _rate_limited(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+async def _rate_limited(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, RateLimitExceeded)
     return error_response(429, f"Too many requests. Limit: {exc.detail}. Please try again later.")
 
 

@@ -20,16 +20,12 @@ from app.errors import error_response, register_error_handlers  # noqa: E402
 from app.logging_config import configure_logging  # noqa: E402
 from app.middleware import RequestLogMiddleware  # noqa: E402
 from app.rate_limit import limiter  # noqa: E402
-from app.routers import auth, categories, expenses, recurring, stats, export, budgets  # noqa: E402
+from app.routers import auth, budgets, categories, expenses, export, recurring, stats  # noqa: E402
 
 configure_logging(settings.log_level, json_logs=settings.app_env == "production")
 logger = logging.getLogger("app")
 
-app = FastAPI(
-    title="Wallet Agent API",
-    description="A manual expense tracker API",
-    version="1.0.0"
-)
+app = FastAPI(title="Wallet Agent API", description="A manual expense tracker API", version="1.0.0")
 
 app.state.limiter = limiter
 register_error_handlers(app)

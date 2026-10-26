@@ -17,7 +17,12 @@ export async function registerNewUser(page: Page, prefix = "e2e") {
 /** Add an expense through the dashboard's "New Expense" dialog. */
 export async function addExpense(
   page: Page,
-  { amount, category, note, date }: { amount: string; category: string; note: string; date?: string }
+  {
+    amount,
+    category,
+    note,
+    date,
+  }: { amount: string; category: string; note: string; date?: string }
 ) {
   await page.getByRole("button", { name: "New Expense" }).click();
   const dialog = page.getByRole("dialog");

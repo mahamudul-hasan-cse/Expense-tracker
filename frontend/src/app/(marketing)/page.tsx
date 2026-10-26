@@ -40,8 +40,7 @@ const features = [
   {
     icon: TrendingUp,
     title: "Budget Goals",
-    description:
-      "Set monthly budgets per category and track your progress with visual indicators.",
+    description: "Set monthly budgets per category and track your progress with visual indicators.",
   },
   {
     icon: Calendar,
@@ -52,8 +51,7 @@ const features = [
   {
     icon: Download,
     title: "CSV Export",
-    description:
-      "Export your expense data anytime for taxes, reports, or backup purposes.",
+    description: "Export your expense data anytime for taxes, reports, or backup purposes.",
   },
 ];
 
@@ -106,8 +104,8 @@ export default function LandingPage() {
               </span>
             </h1>
             <p className="mx-auto max-w-2xl text-lg text-muted-foreground md:text-xl">
-              A clean, fast expense tracker with beautiful charts, budget goals, and
-              recurring reminders. No signup required — start tracking in seconds.
+              A clean, fast expense tracker with beautiful charts, budget goals, and recurring
+              reminders. No signup required — start tracking in seconds.
             </p>
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Button size="lg" asChild className="gap-2 shadow-lg shadow-primary/25">
@@ -139,9 +137,7 @@ export default function LandingPage() {
             <div className="h-3 w-3 rounded-full bg-rose-500" />
             <div className="h-3 w-3 rounded-full bg-amber-500" />
             <div className="h-3 w-3 rounded-full bg-emerald-500" />
-            <span className="ml-4 text-sm text-muted-foreground">
-              wallet-agent.app/dashboard
-            </span>
+            <span className="ml-4 text-sm text-muted-foreground">wallet-agent.app/dashboard</span>
           </div>
           <div className="aspect-video bg-gradient-to-br from-primary/5 via-transparent to-purple-500/5 p-8">
             <div className="grid h-full grid-cols-3 gap-4">
@@ -190,21 +186,21 @@ export default function LandingPage() {
               Everything you need to manage expenses
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Simple tools that help you understand where your money goes and stay
-              on budget.
+              Simple tools that help you understand where your money goes and stay on budget.
             </p>
           </div>
           <div className="mx-auto mt-16 grid max-w-5xl gap-6 md:grid-cols-2 lg:grid-cols-3">
             {features.map((feature) => (
-              <Card key={feature.title} className="group border bg-background/50 transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
+              <Card
+                key={feature.title}
+                className="group border bg-background/50 transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5"
+              >
                 <CardContent className="pt-6">
                   <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-colors group-hover:bg-primary/20">
                     <feature.icon className="h-6 w-6 text-primary" />
                   </div>
                   <h3 className="mb-2 font-semibold">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {feature.description}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{feature.description}</p>
                 </CardContent>
               </Card>
             ))}
@@ -268,8 +264,8 @@ export default function LandingPage() {
               Ready to take control?
             </h2>
             <p className="text-lg text-muted-foreground">
-              Join thousands who track their expenses with Wallet Agent. Free forever,
-              no strings attached.
+              Join thousands who track their expenses with Wallet Agent. Free forever, no strings
+              attached.
             </p>
             <Button size="lg" asChild className="gap-2 shadow-lg shadow-primary/25">
               <Link href="/dashboard">

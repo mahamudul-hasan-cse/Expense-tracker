@@ -1,11 +1,12 @@
-from pydantic import BaseModel, Field, field_validator
-from uuid import UUID
 from datetime import date
-from decimal import Decimal
-from typing import Optional, Literal, Annotated
+from typing import Literal, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator
+
 from app.schemas.category import CategoryResponse
-from app.schemas.types import Money, MoneyIn
 from app.schemas.pagination import PaginationInfo
+from app.schemas.types import Money, MoneyIn
 
 
 class RecurringExpenseBase(BaseModel):

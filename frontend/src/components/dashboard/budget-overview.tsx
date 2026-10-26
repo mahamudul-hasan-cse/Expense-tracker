@@ -61,7 +61,13 @@ export function BudgetOverview() {
           </div>
           <Progress
             value={Math.min(data.percentage, 100)}
-            className={data.percentage > 90 ? "[&>div]:bg-destructive" : data.percentage > 75 ? "[&>div]:bg-yellow-500" : ""}
+            className={
+              data.percentage > 90
+                ? "[&>div]:bg-destructive"
+                : data.percentage > 75
+                  ? "[&>div]:bg-yellow-500"
+                  : ""
+            }
           />
           <p className="text-xs text-muted-foreground text-right">
             {data.percentage.toFixed(1)}% used
@@ -83,7 +89,9 @@ export function BudgetOverview() {
                     <CheckCircle2 className="h-3 w-3 text-green-500" />
                   )}
                 </div>
-                <span className={budget.percentage > 100 ? "text-destructive" : "text-muted-foreground"}>
+                <span
+                  className={budget.percentage > 100 ? "text-destructive" : "text-muted-foreground"}
+                >
                   {formatCurrency(budget.spent)} / {formatCurrency(budget.amount)}
                 </span>
               </div>

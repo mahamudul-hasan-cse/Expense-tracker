@@ -10,7 +10,13 @@ export interface ExpenseFilterState {
 }
 
 /** Turn the list page's filter state into API query params, dropping empty filters. */
-export function buildExpenseQuery({ page, categoryFilter, startDate, endDate, search }: ExpenseFilterState) {
+export function buildExpenseQuery({
+  page,
+  categoryFilter,
+  startDate,
+  endDate,
+  search,
+}: ExpenseFilterState) {
   const trimmed = search.trim();
   return {
     page,

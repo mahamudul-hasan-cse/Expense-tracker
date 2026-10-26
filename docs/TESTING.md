@@ -43,3 +43,20 @@ The defaults point at those names on `localhost:5432`. Override them with:
 - First time only: `npx playwright install chromium`.
 - Flows: register → add expense → dashboard and list → logout → login → session restored on reload; wrong password; budget creation updating live as expenses are added; expense filters (search, category, back to All Categories, date range).
 - On failure: `npx playwright show-trace test-results/<test>/trace.zip`.
+
+## Lint, format, types
+
+| | Backend (`cd backend`) | Frontend (`cd frontend`) |
+|---|---|---|
+| Lint | `uv run ruff check .` | `npm run lint` |
+| Format | `uv run ruff format .` | `npm run format` (`format:check` in CI) |
+| Types | `uv run mypy` | `npm run typecheck` |
+
+**Pre-commit hooks** (ruff, Prettier, ESLint, whitespace/YAML checks, private-key and **gitleaks secret scanning**): run `uvx pre-commit install` once. Then they run on every commit; to run them on everything, use `uvx pre-commit run --all-files`.
+
+**CI** (`.github/workflows/ci.yml`) runs on every push to `main` and on every PR:
+- **backend**: ruff, format check, mypy, pytest against a Postgres 16 service
+- **frontend**: ESLint, Prettier check, `tsc`, Vitest, production build
+- **e2e**: Playwright against a production build, with a Postgres service. Runs after the first two pass; the report is uploaded on failure.
+
+Dependencies are cached (uv, npm, Playwright browsers). `OPENROUTER_API_KEY` is empty in CI.

@@ -23,8 +23,7 @@ export const queryKeys = {
     search?: string;
   }) => ["expenses", params] as const,
   recurring: ["recurring"] as const,
-  stats: (period: "weekly" | "monthly", date?: string) =>
-    ["stats", period, date] as const,
+  stats: (period: "weekly" | "monthly", date?: string) => ["stats", period, date] as const,
   upcoming: ["upcoming"] as const,
   budgets: (month?: number, year?: number) => ["budgets", month, year] as const,
   budgetSummary: (month?: number, year?: number) => ["budgetSummary", month, year] as const,
@@ -110,8 +109,7 @@ export function useCreateExpense() {
 export function useUpdateExpense() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: ExpenseUpdate }) =>
-      api.updateExpense(id, data),
+    mutationFn: ({ id, data }: { id: string; data: ExpenseUpdate }) => api.updateExpense(id, data),
     onSuccess: () => {
       invalidateExpenseData(queryClient);
     },
@@ -214,8 +212,7 @@ export function useCreateBudget() {
 export function useUpdateBudget() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: BudgetUpdate }) =>
-      api.updateBudget(id, data),
+    mutationFn: ({ id, data }: { id: string; data: BudgetUpdate }) => api.updateBudget(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       queryClient.invalidateQueries({ queryKey: ["budgetSummary"] });

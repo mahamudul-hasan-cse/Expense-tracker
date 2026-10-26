@@ -195,7 +195,11 @@ export function Settings() {
     const dueDay = parseInt(recurringDueDay);
     const maxDueDay = recurringFrequency === "weekly" ? 7 : 31;
     if (!(dueDay >= 1 && dueDay <= maxDueDay)) {
-      toast({ title: "Error", description: `Due day must be 1-${maxDueDay}`, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: `Due day must be 1-${maxDueDay}`,
+        variant: "destructive",
+      });
       return;
     }
     const data = {
@@ -250,11 +254,19 @@ export function Settings() {
       return;
     }
     if (exportStartDate > exportEndDate) {
-      toast({ title: "Error", description: "From date must be before To date", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "From date must be before To date",
+        variant: "destructive",
+      });
       return;
     }
     api.exportCSV(exportStartDate, exportEndDate).catch((error: Error) =>
-      toast({ title: "Error", description: error.message || "Export failed", variant: "destructive" })
+      toast({
+        title: "Error",
+        description: error.message || "Export failed",
+        variant: "destructive",
+      })
     );
   };
 
@@ -342,7 +354,9 @@ export function Settings() {
                       <p className="font-medium">
                         {rec.name}
                         {!rec.is_active && (
-                          <span className="ml-2 text-xs font-normal text-muted-foreground">(paused)</span>
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">
+                            (paused)
+                          </span>
                         )}
                       </p>
                       <p className="text-sm text-muted-foreground">
@@ -538,9 +552,7 @@ export function Settings() {
             <Button variant="outline" onClick={() => setRecurringDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveRecurring}>
-              {editingRecurring ? "Update" : "Add"}
-            </Button>
+            <Button onClick={handleSaveRecurring}>{editingRecurring ? "Update" : "Add"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

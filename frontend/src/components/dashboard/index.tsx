@@ -8,7 +8,18 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { Category, Expense } from "@/types";
 import { DashboardSkeleton } from "@/components/shared/skeletons";
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 import { Plus, Edit2, ArrowRight, TrendingUp, Wallet, CalendarDays, Target } from "lucide-react";
 import Link from "next/link";
 import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
@@ -66,17 +77,19 @@ export function Dashboard() {
     return <DashboardSkeleton />;
   }
 
-  const pieData = stats?.by_category.map((cat) => ({
-    name: cat.category_name,
-    value: Number(cat.total),
-    icon: cat.category_icon,
-  })) || [];
+  const pieData =
+    stats?.by_category.map((cat) => ({
+      name: cat.category_name,
+      value: Number(cat.total),
+      icon: cat.category_icon,
+    })) || [];
 
-  const barData = stats?.daily_totals.map((dt) => ({
-    // Weekly: "Mon", "Tue"…; monthly: day of month
-    date: format(parseISO(dt.date), period === "weekly" ? "EEE" : "d"),
-    total: Number(dt.total),
-  })) || [];
+  const barData =
+    stats?.daily_totals.map((dt) => ({
+      // Weekly: "Mon", "Tue"…; monthly: day of month
+      date: format(parseISO(dt.date), period === "weekly" ? "EEE" : "d"),
+      total: Number(dt.total),
+    })) || [];
 
   const totalSpent = Number(stats?.total_spent || 0);
   const avgDaily = barData.length > 0 ? totalSpent / barData.length : 0;
@@ -102,9 +115,7 @@ export function Dashboard() {
         <Card className="relative overflow-hidden">
           <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-primary/10" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Spent
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Spent</CardTitle>
             <div className="rounded-full bg-primary/10 p-2">
               <Wallet className="h-4 w-4 text-primary" />
             </div>
@@ -136,16 +147,16 @@ export function Dashboard() {
         <Card className="relative overflow-hidden">
           <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-amber-500/10" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Categories
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Categories</CardTitle>
             <div className="rounded-full bg-amber-500/10 p-2">
               <Target className="h-4 w-4 text-amber-500" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{pieData.length}</div>
-            <p className="mt-1 text-xs text-muted-foreground">With spending this {period === "weekly" ? "week" : "month"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              With spending this {period === "weekly" ? "week" : "month"}
+            </p>
           </CardContent>
         </Card>
 
@@ -188,15 +199,18 @@ export function Dashboard() {
                       dataKey="value"
                     >
                       {pieData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={CHART_COLORS[index % CHART_COLORS.length]}
+                        />
                       ))}
                     </Pie>
-                    <Tooltip 
+                    <Tooltip
                       formatter={(value: number) => formatCurrency(value)}
-                      contentStyle={{ 
-                        borderRadius: '8px',
-                        border: '1px solid hsl(var(--border))',
-                        backgroundColor: 'hsl(var(--card))'
+                      contentStyle={{
+                        borderRadius: "8px",
+                        border: "1px solid hsl(var(--border))",
+                        backgroundColor: "hsl(var(--card))",
                       }}
                     />
                   </PieChart>
@@ -204,8 +218,8 @@ export function Dashboard() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {pieData.slice(0, 6).map((item, index) => (
                     <div key={item.name} className="flex items-center gap-2">
-                      <div 
-                        className="h-3 w-3 rounded-full" 
+                      <div
+                        className="h-3 w-3 rounded-full"
                         style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
                       />
                       <span className="truncate text-muted-foreground">{item.name}</span>
@@ -230,32 +244,32 @@ export function Dashboard() {
             {barData.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={barData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false} 
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="hsl(var(--border))"
                   />
-                  <YAxis 
-                    axisLine={false} 
+                  <XAxis
+                    dataKey="date"
+                    axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
                     tickFormatter={(value) => `৳${value}`}
                   />
-                  <Tooltip 
+                  <Tooltip
                     formatter={(value: number) => formatCurrency(value)}
-                    contentStyle={{ 
-                      borderRadius: '8px',
-                      border: '1px solid hsl(var(--border))',
-                      backgroundColor: 'hsl(var(--card))'
+                    contentStyle={{
+                      borderRadius: "8px",
+                      border: "1px solid hsl(var(--border))",
+                      backgroundColor: "hsl(var(--card))",
                     }}
                   />
-                  <Bar 
-                    dataKey="total" 
-                    fill="hsl(var(--primary))" 
-                    radius={[6, 6, 0, 0]} 
-                  />
+                  <Bar dataKey="total" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

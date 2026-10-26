@@ -43,13 +43,14 @@ def get_current_user(
 
 def get_user_category(db: Session, category_id: UUID, user: User) -> Category:
     """Return the user's category, or raise 400 (used when validating request bodies)."""
-    category = db.query(Category).filter(
-        Category.id == category_id,
-        Category.user_id == user.id,
-    ).first()
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Category not found"
+    category = (
+        db.query(Category)
+        .filter(
+            Category.id == category_id,
+            Category.user_id == user.id,
         )
+        .first()
+    )
+    if not category:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category not found")
     return category

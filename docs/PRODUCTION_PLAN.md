@@ -186,32 +186,17 @@ Done: Phases 0–3. Proposed from here:
 - [x] One command per suite: `uv run pytest`, `npm test`, `npm run test:e2e`, documented in `docs/TESTING.md`.
 
 ## Phase 5 — Code quality and CI
-- [ ] ruff (lint + format), mypy; fix findings
-- [ ] ESLint (`next/core-web-vitals`) + Prettier; fix findings
-- [ ] pre-commit (ruff, prettier, eslint)
-- [ ] `.github/workflows/ci.yml` with a Postgres service; cached deps; README badge
-- [ ] Dependabot (npm, uv/pip, github-actions)
-
-## Phase S0 — Playwright smoke suite
-*Verified: `npm run test:e2e` → 2 passed on Next 14.2.35 (production build, real FastAPI + Postgres 16 via pgserver). `tsc` passes.*
-- [x] Playwright 1.64.1 (Chromium) in `frontend/`, tests in `frontend/e2e/`, `npm run test:e2e`. `playwright.config.ts` starts the backend (runs migrations, then uvicorn on :8100) and a **production build** of the frontend (`next build` + `next start` on :3100, built into `.next-e2e` so a running `next dev` isn't disturbed). It uses `E2E_DATABASE_URL`, rate limits are off for e2e, and the assistant key is blanked.
-- [x] Smoke flow: register → dashboard + default quick-add categories → add expense (dialog, category select) → toast → shown in recent expenses → shown in /expenses → logout → /dashboard redirects to /login → login again → data still there → reload keeps the session (refresh cookie through the proxy)
-- [x] Wrong password shows the error and stays on /login
-- [x] Green on Next 14.2.35 (baseline before the upgrade)
-
-## Phase N15 — Next.js 15.5 upgrade
-*Verified: `tsc`, `npm run build`, the Playwright smoke suite (2/2) on the upgraded production build, `npm audit`, image optimizer still disabled (404), proxy headers unchanged.*
-- [x] Next 14.2.35 → **15.5.28**, React 18 → **19.3.1**, `@types/react(-dom)` 19. (`eslint-config-next` moves to Phase 5, since ESLint isn't installed yet.)
-- [x] Dependencies for React 19:
-  - Radix packages at their latest 1.x/2.x
-  - Recharts 2.12 → 2.15.4
-  - lucide-react 0.378 → **0.577.0**, the last 0.x. 1.x is a major release, so I didn't move to it without asking.
-  - next-themes 0.4.6 (already compatible)
-  - **Removed 5 unused dependencies** (no imports anywhere in `src/`): `react-day-picker` (v8 doesn't accept React 19), `sonner`, `@radix-ui/react-dropdown-menu`, `@radix-ui/react-popover`, `@radix-ui/react-separator`.
-- [x] No code changes needed: no `cookies()`/`headers()`/async params, no server-side `fetch`, and `tsc` is clean under React 19 types.
-- [x] `npm audit`: **all `next` advisories cleared** (critical RCE, request smuggling, RSC DoS, etc.). Next pins PostCSS 8.4.31 (vulnerable, build-time), so an npm `overrides` entry points it at the patched top-level 8.5.31; the build was re-checked. **Remaining: 4 moderate**, all Tailwind 3 build-time tooling (`postcss-selector-parser` via tailwindcss/postcss-nested/tailwindcss-animate). The fix needs Tailwind 4 (major), and they're never shipped to users.
-- [x] Smoke suite **green again** on the upgraded production build.
-- Note: `next start` warns with `output: 'standalone'`. It works for e2e, and production will run `node .next/standalone/server.js` (Phase 8).
+*Verified locally: ruff + format + mypy clean, pytest 124 passed (97.7%), ESLint 0 warnings, Prettier clean, `tsc`, Vitest 31 passed, production build, `uv sync --locked`, all 11 pre-commit hooks pass, `actionlint` clean on the workflow. **Not verified: an actual GitHub Actions run** (no GitHub remote yet).*
+- [x] **ruff** (lint E/F/W/I/B, line length 120, quote style preserved to minimise churn) and **mypy** (pydantic plugin, `check_untyped_defs`). The 40 mypy errors were fixed properly:
+  - Models moved to SQLAlchemy 2.0 typed `Mapped[...]` declarations; `alembic check` confirms **no schema change**.
+  - Stats grouping is now typed, implicit `Optional` is gone, the login `None` path is narrowed, and exception handlers are typed.
+  - 90 ruff auto-fixes (unused imports, import order, whitespace) plus `== True` → `.is_(True)`.
+- [x] **Bug caught:** ruff's unused-import fix removed the model imports from `alembic/env.py`, which made autogenerate want to **drop every table**. Fixed with a model registry (`app/models/__init__.py`) imported by env.py. New test `test_migrations.py` runs `alembic check` **in a fresh process**: it fails with the broken env.py and passes with the fix.
+- [x] **ESLint 9** flat config (`next/core-web-vitals` + `next/typescript` + `prettier`) and **Prettier** (double quotes, semicolons, width 100). The 5 lint findings are fixed and 43 files were formatted (formatting only; tests and build re-checked). New scripts: `lint`, `format`, `format:check`, `typecheck`.
+- [x] **pre-commit** (`.pre-commit-config.yaml`): whitespace/EOF/YAML/merge-conflict/large-file/private-key checks, **gitleaks** (checked: it **blocks a staged fake `sk-or-…` key**), ruff check + format, Prettier, ESLint.
+- [x] **GitHub Actions** `.github/workflows/ci.yml`: backend, frontend and e2e jobs with Postgres 16 services; uv/npm/Playwright caching; concurrency cancel; read-only permissions; empty `OPENROUTER_API_KEY`.
+- [x] **Dependabot** for npm, uv and GitHub Actions, weekly, with grouped minor/patch updates. Majors for tailwindcss/lucide/next are ignored, per the decisions.
+- [~] **CI badge**: added to the README with an `OWNER/REPO` placeholder. **Needs your GitHub repository path.**
 
 ## Phase F1 — Income and savings goals (approved 2026-10-26, revised to meet your requirements)
 

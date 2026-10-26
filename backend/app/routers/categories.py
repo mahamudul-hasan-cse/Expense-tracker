@@ -1,21 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user
-from app.models.user import User
-from app.pagination import paginate
 from app.models.budget import Budget
 from app.models.category import Category
 from app.models.expense import Expense
 from app.models.recurring import RecurringExpense
+from app.models.user import User
+from app.pagination import paginate
 from app.schemas.category import (
-    CategoryCreate,
-    CategoryUpdate,
-    CategoryResponse,
     CategoriesListResponse,
+    CategoryCreate,
+    CategoryResponse,
+    CategoryUpdate,
 )
 
 router = APIRouter(prefix="/categories", tags=["Categories"])
@@ -29,10 +30,12 @@ def get_categories(
     current_user: User = Depends(get_current_user),
 ):
     """Get all categories."""
-    categories = db.query(Category).filter(
-        Category.user_id == current_user.id
-    ).order_by(Category.is_default.desc(), Category.name, Category.id)
-    categories, pagination = paginate(categories, page, limit)
+    query = (
+        db.query(Category)
+        .filter(Category.user_id == current_user.id)
+        .order_by(Category.is_default.desc(), Category.name, Category.id)
+    )
+    categories, pagination = paginate(query, page, limit)
     return CategoriesListResponse(categories=categories, pagination=pagination)
 
 
@@ -44,23 +47,16 @@ def create_category(
 ):
     """Create a new category."""
     # Check for existing category (case-insensitive)
-    existing = db.query(Category).filter(
-        Category.user_id == current_user.id,
-        func.lower(Category.name) == func.lower(category_data.name)
-    ).first()
-    
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Category with this name already exists"
-        )
-    
-    category = Category(
-        user_id=current_user.id,
-        name=category_data.name,
-        icon=category_data.icon,
-        is_default=False
+    existing = (
+        db.query(Category)
+        .filter(Category.user_id == current_user.id, func.lower(Category.name) == func.lower(category_data.name))
+        .first()
     )
+
+    if existing:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category with this name already exists")
+
+    category = Category(user_id=current_user.id, name=category_data.name, icon=category_data.icon, is_default=False)
     db.add(category)
     db.commit()
     db.refresh(category)
@@ -75,40 +71,31 @@ def update_category(
     current_user: User = Depends(get_current_user),
 ):
     """Rename a category or change its icon."""
-    category = db.query(Category).filter(
-        Category.id == category_id,
-        Category.user_id == current_user.id
-    ).first()
+    category = db.query(Category).filter(Category.id == category_id, Category.user_id == current_user.id).first()
 
     if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Category not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
 
     update_data = category_data.model_dump(exclude_unset=True)
     if not update_data:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="At least one field must be provided"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one field must be provided")
     if "name" in update_data and update_data["name"] is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="name cannot be null"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="name cannot be null")
 
     # Check for another category with the same name (case-insensitive)
     if "name" in update_data:
-        existing = db.query(Category).filter(
-            Category.user_id == current_user.id,
-            func.lower(Category.name) == func.lower(update_data["name"]),
-            Category.id != category_id
-        ).first()
+        existing = (
+            db.query(Category)
+            .filter(
+                Category.user_id == current_user.id,
+                func.lower(Category.name) == func.lower(update_data["name"]),
+                Category.id != category_id,
+            )
+            .first()
+        )
         if existing:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Category with this name already exists"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Category with this name already exists"
             )
 
     for key, value in update_data.items():
@@ -126,22 +113,13 @@ def delete_category(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a category (non-default only)."""
-    category = db.query(Category).filter(
-        Category.id == category_id,
-        Category.user_id == current_user.id
-    ).first()
-    
+    category = db.query(Category).filter(Category.id == category_id, Category.user_id == current_user.id).first()
+
     if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Category not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+
     if category.is_default:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete default category"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete default category")
 
     # Refuse to delete categories still referenced by other records
     in_use = [
@@ -156,9 +134,9 @@ def delete_category(
     if in_use:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Category is used by {', '.join(in_use)}. Reassign or delete them first."
+            detail=f"Category is used by {', '.join(in_use)}. Reassign or delete them first.",
         )
-    
+
     db.delete(category)
     db.commit()
     return None

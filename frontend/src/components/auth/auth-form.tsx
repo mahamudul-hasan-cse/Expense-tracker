@@ -5,7 +5,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-provider";
@@ -61,13 +68,20 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="space-y-3 text-center">
-          <Link href="/" className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg bg-primary">
+          <Link
+            href="/"
+            className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg bg-primary"
+          >
             <Wallet className="h-6 w-6 text-primary-foreground" aria-hidden="true" />
             <span className="sr-only">Wallet Agent home</span>
           </Link>
-          <CardTitle className="text-2xl">{isRegister ? "Create your account" : "Welcome back"}</CardTitle>
+          <CardTitle className="text-2xl">
+            {isRegister ? "Create your account" : "Welcome back"}
+          </CardTitle>
           <CardDescription>
-            {isRegister ? "Start tracking your expenses in seconds" : "Sign in to your Wallet Agent account"}
+            {isRegister
+              ? "Start tracking your expenses in seconds"
+              : "Sign in to your Wallet Agent account"}
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit} noValidate>
@@ -115,12 +129,19 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={submitting || !email || !password}>
               {submitting
-                ? isRegister ? "Creating account..." : "Signing in..."
-                : isRegister ? "Create account" : "Sign in"}
+                ? isRegister
+                  ? "Creating account..."
+                  : "Signing in..."
+                : isRegister
+                  ? "Create account"
+                  : "Sign in"}
             </Button>
             <p className="text-sm text-muted-foreground">
               {isRegister ? "Already have an account? " : "Don't have an account? "}
-              <Link href={otherHref} className="font-medium text-primary underline-offset-4 hover:underline">
+              <Link
+                href={otherHref}
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
                 {isRegister ? "Sign in" : "Create one"}
               </Link>
             </p>

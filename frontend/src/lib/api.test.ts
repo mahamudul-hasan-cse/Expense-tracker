@@ -13,7 +13,10 @@ describe("errorMessage", () => {
   it("joins legacy validation error lists and strips the 'Value error' prefix", () => {
     expect(
       errorMessage({
-        detail: [{ msg: "Value error, Expense date cannot be in the future" }, { msg: "Field required" }],
+        detail: [
+          { msg: "Value error, Expense date cannot be in the future" },
+          { msg: "Field required" },
+        ],
       })
     ).toBe("Expense date cannot be in the future; Field required");
   });

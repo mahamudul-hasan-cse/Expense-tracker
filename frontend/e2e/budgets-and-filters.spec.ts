@@ -24,7 +24,10 @@ test("create a budget and watch it fill up as expenses are added", async ({ page
   });
 
   await test.step("a Rickshaw expense updates the budget immediately", async () => {
-    await page.getByRole("button", { name: /Rickshaw/ }).first().click(); // quick add
+    await page
+      .getByRole("button", { name: /Rickshaw/ })
+      .first()
+      .click(); // quick add
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel(/Amount/).fill("120");
     await dialog.getByRole("button", { name: "Save Expense" }).click();
@@ -42,7 +45,12 @@ test("filter the expense list by search, category and date", async ({ page }) =>
   });
   await addExpense(page, { amount: "30", category: "Rickshaw", note: "campus ride" });
   await addExpense(page, { amount: "40", category: "Random", note: "morning tea" });
-  await addExpense(page, { amount: "800", category: "Wifi Bill", note: "old wifi bill", date: lastWeek });
+  await addExpense(page, {
+    amount: "800",
+    category: "Wifi Bill",
+    note: "old wifi bill",
+    date: lastWeek,
+  });
 
   await page.getByRole("link", { name: "Expenses" }).click();
   const rows = page.getByText(/campus ride|morning tea|old wifi bill/);

@@ -23,12 +23,15 @@ def test_register_rejects_duplicate_email_case_insensitive(client):
 
 
 def test_register_validates_email_and_password(client):
-    assert client.post(f"{API}/auth/register", json={"email": "not-an-email", "password": "longenough"}).status_code == 422
+    assert (
+        client.post(f"{API}/auth/register", json={"email": "not-an-email", "password": "longenough"}).status_code == 422
+    )
     assert client.post(f"{API}/auth/register", json={"email": "a@example.com", "password": "short"}).status_code == 422
 
 
 def test_password_is_hashed_with_argon2(client):
     from sqlalchemy import text
+
     from app.database import engine
 
     register(client, "hash@example.com", "my-secret-pass")
@@ -58,9 +61,9 @@ def test_me_requires_valid_token(client, auth_headers):
 
 
 def test_refresh_token_cannot_be_used_as_access_token(client):
+    from app.database import SessionLocal
     from app.security import create_token
     from app.services.users import get_user_by_email
-    from app.database import SessionLocal
 
     register(client, "type@example.com")
     with SessionLocal() as db:

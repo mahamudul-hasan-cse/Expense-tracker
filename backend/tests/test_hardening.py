@@ -14,6 +14,7 @@ API = "/api/v1"
 
 # --- /health -----------------------------------------------------------------
 
+
 def test_health_checks_database(client):
     res = client.get("/health")
     assert res.status_code == 200
@@ -35,6 +36,7 @@ def test_health_reports_database_down(client):
 
 
 # --- Error format ------------------------------------------------------------
+
 
 def _assert_error_shape(res, status, code):
     assert res.status_code == status
@@ -96,6 +98,7 @@ def test_request_id_is_propagated(client):
 
 # --- Rate limiting -----------------------------------------------------------
 
+
 @pytest.fixture
 def rate_limits_on():
     limiter.reset()
@@ -131,7 +134,10 @@ def test_failed_logins_are_limited_per_account(client, rate_limits_on, monkeypat
     assert ok.status_code == 429
     # Other accounts are unaffected
     register(client, "other@example.com", "other-password")
-    assert client.post(f"{API}/auth/login", json={"email": "other@example.com", "password": "other-password"}).status_code == 200
+    assert (
+        client.post(f"{API}/auth/login", json={"email": "other@example.com", "password": "other-password"}).status_code
+        == 200
+    )
 
 
 def test_health_is_not_rate_limited(client, rate_limits_on):
@@ -140,10 +146,15 @@ def test_health_is_not_rate_limited(client, rate_limits_on):
 
 # --- CORS --------------------------------------------------------------------
 
+
 def _preflight(client, origin):
     return client.options(
         f"{API}/expenses",
-        headers={"Origin": origin, "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization"},
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
     )
 
 
@@ -160,6 +171,7 @@ def test_cors_rejects_other_origins(client):
 
 # --- Pagination --------------------------------------------------------------
 
+
 def test_categories_are_paginated(client, auth_headers):
     body = client.get(f"{API}/categories?page=2&limit=3", headers=auth_headers).json()
     assert len(body["categories"]) == 1
@@ -173,8 +185,11 @@ def test_recurring_and_budgets_include_pagination(client, auth_headers):
 
 # --- Logging -----------------------------------------------------------------
 
+
 def test_json_log_format():
-    record = logging.makeLogRecord({"name": "app.test", "levelname": "INFO", "msg": "hello %s", "args": ("world",), "status": 200})
+    record = logging.makeLogRecord(
+        {"name": "app.test", "levelname": "INFO", "msg": "hello %s", "args": ("world",), "status": 200}
+    )
     entry = json.loads(JsonFormatter().format(record))
     assert entry["message"] == "hello world"
     assert entry["level"] == "INFO"

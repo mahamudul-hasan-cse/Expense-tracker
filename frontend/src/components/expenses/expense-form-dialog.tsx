@@ -121,7 +121,7 @@ export function ExpenseFormDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!amount || !categoryId) {
       toast({
         title: "Error",
@@ -157,7 +157,7 @@ export function ExpenseFormDialog({
           description: "Expense added successfully",
         });
       }
-      
+
       onClose();
     } catch (error) {
       toast({

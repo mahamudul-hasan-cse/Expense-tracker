@@ -4,6 +4,7 @@ Bug found in Phase 4: date.today() on a UTC server is still "yesterday" between
 00:00 and 06:00 in Dhaka, so an expense dated today (Dhaka) was rejected as a
 future date, and due-today / current-month logic was a day behind.
 """
+
 from datetime import date, datetime, timezone
 
 import pytest
@@ -35,13 +36,17 @@ def test_today_uses_dhaka_date(dhaka_early_morning):
 
 def test_expense_dated_today_in_dhaka_is_accepted(client, auth_headers, dhaka_early_morning):
     cat = first_category_id(client, auth_headers)
-    res = client.post(f"{API}/expenses", json={"amount": 80, "category_id": cat, "expense_date": "2030-03-11"}, headers=auth_headers)
+    res = client.post(
+        f"{API}/expenses", json={"amount": 80, "category_id": cat, "expense_date": "2030-03-11"}, headers=auth_headers
+    )
     assert res.status_code == 201, res.text
     # Default date is Dhaka's today too
     res = client.post(f"{API}/expenses", json={"amount": 80, "category_id": cat}, headers=auth_headers)
     assert res.json()["expense_date"] == "2030-03-11"
     # The day after is still the future
-    res = client.post(f"{API}/expenses", json={"amount": 80, "category_id": cat, "expense_date": "2030-03-12"}, headers=auth_headers)
+    res = client.post(
+        f"{API}/expenses", json={"amount": 80, "category_id": cat, "expense_date": "2030-03-12"}, headers=auth_headers
+    )
     assert res.status_code == 422
 
 
