@@ -3,7 +3,6 @@ import logging
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
-from slowapi.middleware import SlowAPIASGIMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -15,11 +14,12 @@ try:
 except ValidationError as exc:
     raise SystemExit(f"Configuration error:\n{exc}") from None
 
+from app.assistant import router as assistant_router  # noqa: E402
 from app.database import get_db  # noqa: E402
 from app.errors import error_response, register_error_handlers  # noqa: E402
 from app.logging_config import configure_logging  # noqa: E402
 from app.middleware import RequestLogMiddleware  # noqa: E402
-from app.rate_limit import limiter  # noqa: E402
+from app.rate_limit import RateLimitMiddleware, limiter  # noqa: E402
 from app.routers import (  # noqa: E402
     auth,
     budgets,
@@ -42,7 +42,7 @@ app.state.limiter = limiter
 register_error_handlers(app)
 
 # Middleware runs bottom-up: request log (outermost) -> CORS -> rate limit -> app
-app.add_middleware(SlowAPIASGIMiddleware)
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origins,
@@ -64,6 +64,7 @@ app.include_router(budgets.router, prefix="/api/v1")
 app.include_router(income_categories.router, prefix="/api/v1")
 app.include_router(incomes.router, prefix="/api/v1")
 app.include_router(goals.router, prefix="/api/v1")
+app.include_router(assistant_router.router, prefix="/api/v1")
 
 logger.info("API started", extra={"app_env": settings.app_env, "origins": settings.origins})
 
