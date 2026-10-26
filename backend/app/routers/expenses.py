@@ -16,6 +16,7 @@ from app.schemas.expense import (
     ExpenseResponse,
     ExpenseListResponse,
 )
+from app.timeutil import today as app_today
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
@@ -78,7 +79,7 @@ def create_expense(
         amount=expense_data.amount,
         category_id=expense_data.category_id,
         note=expense_data.note,
-        expense_date=expense_data.expense_date or date.today()
+        expense_date=expense_data.expense_date or app_today()
     )
     db.add(expense)
     db.commit()

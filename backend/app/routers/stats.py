@@ -19,6 +19,7 @@ from app.schemas.stats import (
     UpcomingReminderListResponse,
 )
 from app.routers.recurring import calculate_next_due
+from app.timeutil import today as app_today
 
 router = APIRouter(prefix="/stats", tags=["Statistics"])
 
@@ -47,7 +48,7 @@ def get_stats_summary(
     current_user: User = Depends(get_current_user),
 ):
     """Get spending summary for a period."""
-    reference_date = ref_date or date.today()
+    reference_date = ref_date or app_today()
     start_date, end_date = get_period_dates(period, reference_date)
     
     # Get expenses in the period
@@ -125,7 +126,7 @@ def get_upcoming_recurring(
     current_user: User = Depends(get_current_user),
 ):
     """Get recurring expenses due within the next 7 days."""
-    today = date.today()
+    today = app_today()
     week_later = today + timedelta(days=7)
     
     recurring_list = db.query(RecurringExpense).options(

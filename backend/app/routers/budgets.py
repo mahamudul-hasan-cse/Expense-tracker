@@ -20,6 +20,7 @@ from app.schemas.budget import (
     BudgetSummary,
     CategoryInfo,
 )
+from app.timeutil import today as app_today
 
 router = APIRouter(prefix="/budgets", tags=["Budgets"])
 
@@ -93,7 +94,7 @@ def get_budgets(
     current_user: User = Depends(get_current_user),
 ):
     """Get budgets for a specific month/year. Defaults to current month."""
-    today = date.today()
+    today = app_today()
     target_month = month or today.month
     target_year = year or today.year
 
@@ -118,7 +119,7 @@ def get_budget_summary(
     Not paginated: totals must cover every budget, and there is at most one
     budget per category per month.
     """
-    today = date.today()
+    today = app_today()
     target_month = month or today.month
     target_year = year or today.year
 

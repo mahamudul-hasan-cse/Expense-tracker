@@ -246,9 +246,9 @@ export function BudgetSettings() {
           <div className="space-y-4 py-4">
             {!editingBudget && (
               <div className="space-y-2">
-                <Label>Category</Label>
+                <Label htmlFor="budget-category">Category</Label>
                 <Select value={budgetCategoryId} onValueChange={setBudgetCategoryId}>
-                  <SelectTrigger>
+                  <SelectTrigger id="budget-category">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -271,8 +271,9 @@ export function BudgetSettings() {
               </div>
             )}
             <div className="space-y-2">
-              <Label>Monthly Budget Amount</Label>
+              <Label htmlFor="budget-amount">Monthly Budget Amount</Label>
               <Input
+                id="budget-amount"
                 type="number"
                 placeholder="Enter amount"
                 value={budgetAmount}

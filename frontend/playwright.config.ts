@@ -25,6 +25,8 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${FRONTEND_PORT}`,
     trace: "retain-on-failure",
+    // Users are in Bangladesh; dates in the UI follow the browser timezone
+    timezoneId: "Asia/Dhaka",
     screenshot: "only-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

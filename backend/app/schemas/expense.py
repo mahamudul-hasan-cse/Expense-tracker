@@ -6,6 +6,7 @@ from typing import Optional, Annotated
 from app.schemas.category import CategoryResponse
 from app.schemas.types import Money, MoneyIn
 from app.schemas.pagination import PaginationInfo
+from app.timeutil import today as app_today
 
 
 class ExpenseBase(BaseModel):
@@ -17,7 +18,7 @@ class ExpenseBase(BaseModel):
     @field_validator("expense_date")
     @classmethod
     def validate_expense_date(cls, v):
-        if v is not None and v > date.today():
+        if v is not None and v > app_today():
             raise ValueError("Expense date cannot be in the future")
         return v
 
@@ -35,7 +36,7 @@ class ExpenseUpdate(BaseModel):
     @field_validator("expense_date")
     @classmethod
     def validate_expense_date(cls, v):
-        if v is not None and v > date.today():
+        if v is not None and v > app_today():
             raise ValueError("Expense date cannot be in the future")
         return v
 

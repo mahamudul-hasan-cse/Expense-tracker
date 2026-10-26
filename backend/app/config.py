@@ -14,6 +14,8 @@ class Settings(BaseSettings):
 
     app_env: Literal["development", "test", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    # "Today", due dates and future-date checks use this zone, not the server's
+    app_timezone: str = "Asia/Dhaka"
     database_url: str = DEV_DATABASE_URL
 
     # Comma-separated origins allowed to call the API from a browser.

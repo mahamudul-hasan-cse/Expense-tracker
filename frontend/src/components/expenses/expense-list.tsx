@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit2, Trash2, ChevronLeft, ChevronRight, X, Search } from "lucide-react";
 import { ExpenseFormDialog } from "./expense-form-dialog";
 import { useExpenses, useCategories, useDeleteExpense } from "@/lib/queries";
+import { buildExpenseQuery } from "./expense-filters";
 
 export function ExpenseList() {
   const { toast } = useToast();
@@ -47,14 +48,9 @@ export function ExpenseList() {
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
 
   // React Query hooks
-  const { data: expensesData, isLoading: expensesLoading } = useExpenses({
-    page,
-    limit: 20,
-    category_id: categoryFilter || undefined,
-    start_date: startDate || undefined,
-    end_date: endDate || undefined,
-    search: deferredSearch || undefined,
-  });
+  const { data: expensesData, isLoading: expensesLoading } = useExpenses(
+    buildExpenseQuery({ page, categoryFilter, startDate, endDate, search: deferredSearch })
+  );
   const { data: categoriesData, isLoading: categoriesLoading } = useCategories();
   const deleteExpenseMutation = useDeleteExpense();
 

@@ -16,13 +16,14 @@ from app.schemas.recurring import (
     RecurringExpenseResponse,
     RecurringExpenseListResponse,
 )
+from app.timeutil import today as app_today
 
 router = APIRouter(prefix="/recurring", tags=["Recurring Expenses"])
 
 
 def calculate_next_due(frequency: str, due_day: int, reference_date: date = None) -> date:
     """Calculate the next due date (today counts as due) based on frequency and due_day."""
-    today = reference_date or date.today()
+    today = reference_date or app_today()
 
     if frequency == "weekly":
         # due_day: 1=Monday, 7=Sunday; Python weekday: 0=Monday
