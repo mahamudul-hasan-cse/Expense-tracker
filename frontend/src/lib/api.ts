@@ -19,6 +19,18 @@ import {
   BudgetListResponse,
   BudgetSummary,
   AuthResponse,
+  Cashflow,
+  ContributionCreate,
+  Goal,
+  GoalCreate,
+  GoalListResponse,
+  GoalUpdate,
+  Income,
+  IncomeCategoriesResponse,
+  IncomeCreate,
+  IncomeListResponse,
+  IncomeUpdate,
+  MarkPaidResponse,
   User,
 } from "@/types";
 import {
@@ -251,4 +263,54 @@ export const api = {
     }),
 
   deleteBudget: (id: string) => request<void>(`/budgets/${id}`, { method: "DELETE" }),
+
+  // Recurring: record this cycle as paid / received
+  markRecurringPaid: (id: string, data?: { paid_on?: string; amount?: number }) =>
+    request<MarkPaidResponse>(`/recurring/${id}/mark-paid`, {
+      method: "POST",
+      body: JSON.stringify(data ?? {}),
+    }),
+
+  // Income categories
+  getIncomeCategories: () => request<IncomeCategoriesResponse>("/income-categories"),
+  createIncomeCategory: (data: CategoryCreate) =>
+    request<Category>("/income-categories", { method: "POST", body: JSON.stringify(data) }),
+  updateIncomeCategory: (id: string, data: CategoryUpdate) =>
+    request<Category>(`/income-categories/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteIncomeCategory: (id: string) =>
+    request<void>(`/income-categories/${id}`, { method: "DELETE" }),
+
+  // Income
+  getIncomes: (params?: {
+    page?: number;
+    limit?: number;
+    start_date?: string;
+    end_date?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    Object.entries(params ?? {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") searchParams.set(key, String(value));
+    });
+    const query = searchParams.toString();
+    return request<IncomeListResponse>(`/incomes${query ? `?${query}` : ""}`);
+  },
+  createIncome: (data: IncomeCreate) =>
+    request<Income>("/incomes", { method: "POST", body: JSON.stringify(data) }),
+  updateIncome: (id: string, data: IncomeUpdate) =>
+    request<Income>(`/incomes/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteIncome: (id: string) => request<void>(`/incomes/${id}`, { method: "DELETE" }),
+
+  // Cashflow
+  getCashflow: (month?: string) =>
+    request<Cashflow>(`/stats/cashflow${month ? `?month=${month}` : ""}`),
+
+  // Savings goals
+  getGoals: () => request<GoalListResponse>("/goals"),
+  createGoal: (data: GoalCreate) =>
+    request<Goal>("/goals", { method: "POST", body: JSON.stringify(data) }),
+  updateGoal: (id: string, data: GoalUpdate) =>
+    request<Goal>(`/goals/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteGoal: (id: string) => request<void>(`/goals/${id}`, { method: "DELETE" }),
+  addContribution: (goalId: string, data: ContributionCreate) =>
+    request<Goal>(`/goals/${goalId}/contributions`, { method: "POST", body: JSON.stringify(data) }),
 };

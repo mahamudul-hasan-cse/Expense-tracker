@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, List, LogOut, Settings, Wallet } from "lucide-react";
+import {
+  ArrowDownCircle,
+  LayoutDashboard,
+  List,
+  LogOut,
+  Settings,
+  Target,
+  Wallet,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-provider";
 import { ThemeToggle } from "./theme-toggle";
@@ -18,6 +26,8 @@ export function Navbar() {
   const links = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/expenses", label: "Expenses", icon: List },
+    { href: "/income", label: "Income", icon: ArrowDownCircle },
+    { href: "/goals", label: "Goals", icon: Target },
     { href: "/settings", label: "Settings", icon: Settings },
   ];
 
@@ -29,7 +39,7 @@ export function Navbar() {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary shadow-lg shadow-primary/25">
               <Wallet className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold">Wallet Agent</span>
+            <span className="hidden text-xl font-bold sm:inline">Wallet Agent</span>
           </Link>
           <div className="flex items-center gap-1">
             {links.map((link) => {
@@ -40,14 +50,15 @@ export function Navbar() {
                   key={link.href}
                   href={link.href}
                   className={cn(
-                    "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all",
+                    "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all lg:px-4",
                     isActive
                       ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  {link.label}
+                  {/* Icon-only below lg so five links fit; the name stays for screen readers */}
+                  <span className="sr-only lg:not-sr-only">{link.label}</span>
                 </Link>
               );
             })}

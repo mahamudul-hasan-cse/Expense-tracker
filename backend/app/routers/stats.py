@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -11,14 +11,16 @@ from app.models.category import Category
 from app.models.expense import Expense
 from app.models.recurring import RecurringExpense
 from app.models.user import User
-from app.routers.recurring import calculate_next_due
+from app.routers.recurring import next_unpaid_due
 from app.schemas.stats import (
+    CashflowResponse,
     CategoryBreakdown,
     DailyTotal,
     StatsSummary,
     UpcomingReminder,
     UpcomingReminderListResponse,
 )
+from app.services.cashflow import get_cashflow, month_bounds
 from app.timeutil import today as app_today
 
 router = APIRouter(prefix="/stats", tags=["Statistics"])
@@ -117,31 +119,33 @@ def get_upcoming_recurring(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get recurring expenses due within the next 7 days."""
+    """Recurring bills and income due within the next 7 days (not yet marked paid)."""
     today = app_today()
     week_later = today + timedelta(days=7)
 
     recurring_list = (
         db.query(RecurringExpense)
-        .options(joinedload(RecurringExpense.category))
+        .options(joinedload(RecurringExpense.category), joinedload(RecurringExpense.income_category))
         .filter(RecurringExpense.user_id == current_user.id, RecurringExpense.is_active.is_(True))
         .all()
     )
 
     upcoming = []
     for rec in recurring_list:
-        next_due = calculate_next_due(rec.frequency, rec.due_day)
+        next_due = next_unpaid_due(rec.frequency, rec.due_day, rec.last_paid_on, today)
 
         if today <= next_due <= week_later:
             days_until = (next_due - today).days
+            category = rec.category if rec.kind == "expense" else rec.income_category
             upcoming.append(
                 UpcomingReminder(
                     id=str(rec.id),
+                    kind=rec.kind,
                     name=rec.name,
                     amount=rec.amount,
                     due_date=next_due,
                     days_until=days_until,
-                    category={"name": rec.category.name, "icon": rec.category.icon},
+                    category={"name": category.name, "icon": category.icon} if category else {"name": "", "icon": None},
                 )
             )
 
@@ -149,3 +153,28 @@ def get_upcoming_recurring(
     upcoming.sort(key=lambda x: x.days_until)
 
     return UpcomingReminderListResponse(upcoming=upcoming)
+
+
+@router.get("/cashflow", response_model=CashflowResponse)
+def get_cashflow_summary(
+    month: Optional[str] = Query(None, description="YYYY-MM; defaults to the current month (Asia/Dhaka)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Income, spending, saved (income − spending) and savings rate for a month."""
+    try:
+        label, start, end = month_bounds(month)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from None
+    flow = get_cashflow(db, current_user.id, start, end)
+    return CashflowResponse(
+        month=label,
+        start_date=start,
+        end_date=end,
+        income=flow.income,
+        spent=flow.spent,
+        saved=flow.saved,
+        savings_rate=flow.savings_rate,
+        allocated_to_goals=flow.allocated_to_goals,
+        unallocated=flow.unallocated,
+    )

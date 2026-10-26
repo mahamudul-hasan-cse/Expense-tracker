@@ -7,7 +7,19 @@ imports it so autogenerate sees all models; add new models here.
 from app.models.budget import Budget
 from app.models.category import Category
 from app.models.expense import Expense
+from app.models.goal import GoalContribution, SavingsGoal
+from app.models.income import Income, IncomeCategory
 from app.models.recurring import RecurringExpense
 from app.models.user import User
 
-__all__ = ["Budget", "Category", "Expense", "RecurringExpense", "User"]
+__all__ = [
+    "Budget",
+    "Category",
+    "Expense",
+    "GoalContribution",
+    "Income",
+    "IncomeCategory",
+    "RecurringExpense",
+    "SavingsGoal",
+    "User",
+]

@@ -53,22 +53,31 @@ export interface ExpenseUpdate {
   expense_date?: string;
 }
 
-// Recurring expense types
+// Recurring items: bills (kind "expense") and income such as a salary (kind "income")
+export type RecurringKind = "expense" | "income";
+
 export interface RecurringExpense {
   id: string;
+  kind: RecurringKind;
   name: string;
   amount: number;
-  category: Category;
+  /** Set for kind "expense" */
+  category: Category | null;
+  /** Set for kind "income" */
+  income_category: Category | null;
   frequency: "weekly" | "monthly";
   due_day: number;
   is_active: boolean;
+  last_paid_on: string | null;
   next_due: string;
 }
 
 export interface RecurringExpenseCreate {
+  kind?: RecurringKind;
   name: string;
   amount: number;
-  category_id: string;
+  category_id?: string;
+  income_category_id?: string;
   frequency: "weekly" | "monthly";
   due_day: number;
 }
@@ -77,9 +86,111 @@ export interface RecurringExpenseUpdate {
   name?: string;
   amount?: number;
   category_id?: string;
+  income_category_id?: string;
   frequency?: "weekly" | "monthly";
   due_day?: number;
   is_active?: boolean;
+}
+
+export interface MarkPaidResponse {
+  recurring: RecurringExpense;
+  record_type: RecurringKind;
+  record_id: string;
+}
+
+// Income types (income categories have the same shape as expense categories)
+export interface Income {
+  id: string;
+  amount: number;
+  category: Category;
+  note: string | null;
+  income_date: string; // "YYYY-MM-DD"
+  created_at: string;
+}
+
+export interface IncomeCreate {
+  amount: number;
+  income_category_id: string;
+  note?: string;
+  income_date?: string;
+}
+
+export interface IncomeUpdate {
+  amount?: number;
+  income_category_id?: string;
+  note?: string | null;
+  income_date?: string;
+}
+
+export interface IncomeListResponse {
+  incomes: Income[];
+  pagination: PaginationInfo;
+}
+
+export interface IncomeCategoriesResponse {
+  income_categories: Category[];
+  pagination: PaginationInfo;
+}
+
+// Cashflow: saved = income - spent; goal contributions never change it
+export interface Cashflow {
+  month: string; // "YYYY-MM"
+  start_date: string;
+  end_date: string;
+  income: number;
+  spent: number;
+  saved: number;
+  /** null when there was no income */
+  savings_rate: number | null;
+  allocated_to_goals: number;
+  unallocated: number;
+}
+
+// Savings goals
+export type GoalState = "completed" | "no_deadline" | "overdue" | "on_track" | "behind";
+
+export interface Goal {
+  id: string;
+  name: string;
+  icon: string | null;
+  target_amount: number;
+  target_date: string | null;
+  status: "active" | "archived";
+  created_at: string;
+  saved: number;
+  remaining: number;
+  progress_pct: number;
+  state: GoalState;
+  on_track: boolean | null;
+  months_left: number | null;
+  required_per_month: number | null;
+}
+
+export interface GoalCreate {
+  name: string;
+  icon?: string;
+  target_amount: number;
+  target_date?: string;
+}
+
+export interface GoalUpdate {
+  name?: string;
+  icon?: string | null;
+  target_amount?: number;
+  target_date?: string | null;
+  status?: "active" | "archived";
+}
+
+export interface GoalListResponse {
+  goals: Goal[];
+  pagination: PaginationInfo;
+}
+
+export interface ContributionCreate {
+  /** Negative = withdrawal */
+  amount: number;
+  contributed_on?: string;
+  note?: string;
 }
 
 // Statistics types
@@ -108,6 +219,7 @@ export interface StatsSummary {
 
 export interface UpcomingReminder {
   id: string;
+  kind: RecurringKind;
   name: string;
   amount: number;
   due_date: string;

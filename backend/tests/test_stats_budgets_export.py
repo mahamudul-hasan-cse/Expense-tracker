@@ -134,10 +134,11 @@ def test_csv_export(client, auth_headers, cats):
     assert res.headers["content-type"].startswith("text/csv")
     assert "expenses_2026-01-01_2026-01-31.csv" in res.headers["content-disposition"]
     rows = list(csv.reader(io.StringIO(res.text)))
-    assert rows[0] == ["Date", "Amount", "Category", "Note"]
+    # Type is appended last so the original column positions are unchanged
+    assert rows[0] == ["Date", "Amount", "Category", "Note", "Type"]
     assert rows[1:] == [
-        ["2026-01-18", "30.00", "Rickshaw", ""],
-        ["2026-01-17", "350.00", "Random", 'Lunch, "Chillox"'],  # quoting round-trips
+        ["2026-01-18", "30.00", "Rickshaw", "", "Expense"],
+        ["2026-01-17", "350.00", "Random", 'Lunch, "Chillox"', "Expense"],  # quoting round-trips
     ]
 
 

@@ -16,7 +16,17 @@ from tests.conftest import BACKEND_DIR, TEST_DATABASE_URL
 def test_all_tables_are_registered():
     import app.models  # noqa: F401
 
-    assert {"users", "categories", "expenses", "recurring_expenses", "budgets"} <= set(Base.metadata.tables)
+    assert {
+        "users",
+        "categories",
+        "expenses",
+        "recurring_expenses",
+        "budgets",
+        "income_categories",
+        "incomes",
+        "savings_goals",
+        "goal_contributions",
+    } <= set(Base.metadata.tables)
 
 
 def test_models_match_migrations():

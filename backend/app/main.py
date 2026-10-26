@@ -20,7 +20,18 @@ from app.errors import error_response, register_error_handlers  # noqa: E402
 from app.logging_config import configure_logging  # noqa: E402
 from app.middleware import RequestLogMiddleware  # noqa: E402
 from app.rate_limit import limiter  # noqa: E402
-from app.routers import auth, budgets, categories, expenses, export, recurring, stats  # noqa: E402
+from app.routers import (  # noqa: E402
+    auth,
+    budgets,
+    categories,
+    expenses,
+    export,
+    goals,
+    income_categories,
+    incomes,
+    recurring,
+    stats,
+)
 
 configure_logging(settings.log_level, json_logs=settings.app_env == "production")
 logger = logging.getLogger("app")
@@ -50,6 +61,9 @@ app.include_router(recurring.router, prefix="/api/v1")
 app.include_router(stats.router, prefix="/api/v1")
 app.include_router(export.router, prefix="/api/v1")
 app.include_router(budgets.router, prefix="/api/v1")
+app.include_router(income_categories.router, prefix="/api/v1")
+app.include_router(incomes.router, prefix="/api/v1")
+app.include_router(goals.router, prefix="/api/v1")
 
 logger.info("API started", extra={"app_env": settings.app_env, "origins": settings.origins})
 

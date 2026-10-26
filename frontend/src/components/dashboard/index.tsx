@@ -23,8 +23,18 @@ import {
 import { Plus, Edit2, ArrowRight, TrendingUp, Wallet, CalendarDays, Target } from "lucide-react";
 import Link from "next/link";
 import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
-import { useStats, useCategories, useExpenses, useUpcoming } from "@/lib/queries";
+import {
+  useStats,
+  useCategories,
+  useExpenses,
+  useUpcoming,
+  useMarkRecurringPaid,
+} from "@/lib/queries";
+import { useToast } from "@/hooks/use-toast";
+import { UpcomingReminder } from "@/types";
 import { BudgetOverview } from "./budget-overview";
+import { CashflowRow } from "./cashflow-row";
+import { GoalsCard } from "./goals-card";
 
 const CHART_COLORS = [
   "hsl(262, 83%, 58%)",
@@ -54,6 +64,23 @@ export function Dashboard() {
   const upcoming = upcomingData?.upcoming ?? [];
 
   const loading = statsLoading || categoriesLoading || expensesLoading || upcomingLoading;
+
+  const { toast } = useToast();
+  const markPaid = useMarkRecurringPaid();
+  const handleMarkPaid = (reminder: UpcomingReminder) => {
+    markPaid.mutate(reminder.id, {
+      onSuccess: () =>
+        toast({
+          title: "Success",
+          description:
+            reminder.kind === "income"
+              ? `${reminder.name} recorded as income`
+              : `${reminder.name} recorded as an expense`,
+        }),
+      onError: (error) =>
+        toast({ title: "Error", description: error.message, variant: "destructive" }),
+    });
+  };
 
   const handleQuickAdd = (category: Category) => {
     setSelectedCategory(category);
@@ -177,6 +204,9 @@ export function Dashboard() {
         </Card>
       </div>
 
+      {/* Income / Spent / Saved this month */}
+      <CashflowRow />
+
       {/* Charts Row */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Pie Chart */}
@@ -282,7 +312,10 @@ export function Dashboard() {
       </div>
 
       {/* Budget Overview */}
-      <BudgetOverview />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <BudgetOverview />
+        <GoalsCard />
+      </div>
 
       {/* Quick Add */}
       <Card>
@@ -322,7 +355,7 @@ export function Dashboard() {
         {/* Upcoming Reminders */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Upcoming Bills</CardTitle>
+            <CardTitle>Upcoming Bills &amp; Income</CardTitle>
             <Link href="/settings">
               <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground">
                 Manage <ArrowRight className="h-4 w-4" />
@@ -352,13 +385,29 @@ export function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <p className="text-lg font-bold">{formatCurrency(Number(reminder.amount))}</p>
+                    <div className="flex flex-col items-end gap-1">
+                      <p
+                        className={`text-lg font-bold ${reminder.kind === "income" ? "text-emerald-600 dark:text-emerald-400" : ""}`}
+                      >
+                        {reminder.kind === "income" ? "+" : ""}
+                        {formatCurrency(Number(reminder.amount))}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleMarkPaid(reminder)}
+                        disabled={markPaid.isPending}
+                        aria-label={`${reminder.kind === "income" ? "Mark received" : "Mark paid"}: ${reminder.name}`}
+                      >
+                        {reminder.kind === "income" ? "Mark received" : "Mark paid"}
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-                No upcoming bills
+                Nothing due in the next 7 days
               </div>
             )}
           </CardContent>

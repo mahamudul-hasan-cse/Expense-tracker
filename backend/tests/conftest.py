@@ -28,7 +28,7 @@ from app.database import engine  # noqa: E402
 from app.main import app  # noqa: E402
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-TABLES = "users, categories, expenses, recurring_expenses, budgets"
+TABLES = "users, categories, expenses, recurring_expenses, budgets, income_categories, incomes, savings_goals, goal_contributions"
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.category import Category
+from app.models.income import IncomeCategory
 from app.models.user import User
 from app.security import decode_token
 
@@ -53,4 +54,16 @@ def get_user_category(db: Session, category_id: UUID, user: User) -> Category:
     )
     if not category:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category not found")
+    return category
+
+
+def get_user_income_category(db: Session, income_category_id: UUID, user: User) -> IncomeCategory:
+    """Return the user's income category, or raise 400 (used when validating request bodies)."""
+    category = (
+        db.query(IncomeCategory)
+        .filter(IncomeCategory.id == income_category_id, IncomeCategory.user_id == user.id)
+        .first()
+    )
+    if not category:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Income category not found")
     return category

@@ -31,12 +31,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { Category, RecurringExpense } from "@/types";
+import { Category, RecurringExpense, RecurringKind } from "@/types";
 import { SettingsSkeleton } from "@/components/shared/skeletons";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit2, Trash2, Download } from "lucide-react";
 import {
   useCategories,
+  useIncomeCategories,
   useCreateCategory,
   useUpdateCategory,
   useDeleteCategory,
@@ -46,6 +47,7 @@ import {
   useDeleteRecurring,
 } from "@/lib/queries";
 import { BudgetSettings } from "./budget-settings";
+import { IncomeCategories } from "./income-categories";
 
 export function Settings() {
   const { toast } = useToast();
@@ -53,6 +55,8 @@ export function Settings() {
   // React Query hooks
   const { data: categoriesData, isLoading: categoriesLoading } = useCategories();
   const { data: recurringData, isLoading: recurringLoading } = useRecurring();
+  const { data: incomeCategoriesData } = useIncomeCategories();
+  const incomeCategories = incomeCategoriesData?.income_categories ?? [];
   const createCategoryMutation = useCreateCategory();
   const updateCategoryMutation = useUpdateCategory();
   const deleteCategoryMutation = useDeleteCategory();
@@ -75,6 +79,8 @@ export function Settings() {
   const [editingRecurring, setEditingRecurring] = useState<RecurringExpense | null>(null);
   const [recurringName, setRecurringName] = useState("");
   const [recurringAmount, setRecurringAmount] = useState("");
+  const [recurringKind, setRecurringKind] = useState<RecurringKind>("expense");
+  // Expense category id, or income category id when the kind is "income"
   const [recurringCategoryId, setRecurringCategoryId] = useState("");
   const [recurringFrequency, setRecurringFrequency] = useState<"weekly" | "monthly">("monthly");
   const [recurringDueDay, setRecurringDueDay] = useState("");
@@ -173,13 +179,17 @@ export function Settings() {
       setEditingRecurring(rec);
       setRecurringName(rec.name);
       setRecurringAmount(rec.amount.toString());
-      setRecurringCategoryId(rec.category.id);
+      setRecurringKind(rec.kind);
+      setRecurringCategoryId(
+        (rec.kind === "income" ? rec.income_category : rec.category)?.id ?? ""
+      );
       setRecurringFrequency(rec.frequency);
       setRecurringDueDay(rec.due_day.toString());
     } else {
       setEditingRecurring(null);
       setRecurringName("");
       setRecurringAmount("");
+      setRecurringKind("expense");
       setRecurringCategoryId("");
       setRecurringFrequency("monthly");
       setRecurringDueDay("");
@@ -202,10 +212,14 @@ export function Settings() {
       });
       return;
     }
+    const categoryField =
+      recurringKind === "income"
+        ? { income_category_id: recurringCategoryId }
+        : { category_id: recurringCategoryId };
     const data = {
       name: recurringName,
       amount: parseFloat(recurringAmount),
-      category_id: recurringCategoryId,
+      ...categoryField,
       frequency: recurringFrequency,
       due_day: dueDay,
     };
@@ -226,10 +240,13 @@ export function Settings() {
         { onSuccess: () => onSuccess("Recurring expense updated successfully"), onError }
       );
     } else {
-      createRecurringMutation.mutate(data, {
-        onSuccess: () => onSuccess("Recurring expense added successfully"),
-        onError,
-      });
+      createRecurringMutation.mutate(
+        { ...data, kind: recurringKind },
+        {
+          onSuccess: () => onSuccess("Recurring expense added successfully"),
+          onError,
+        }
+      );
     }
   };
 
@@ -331,10 +348,13 @@ export function Settings() {
         </CardContent>
       </Card>
 
+      {/* Income categories */}
+      <IncomeCategories />
+
       {/* Recurring Expenses */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">Recurring Expenses</CardTitle>
+          <CardTitle className="text-lg">Recurring Bills &amp; Income</CardTitle>
           <Button size="sm" onClick={() => openRecurringDialog()} className="gap-1">
             <Plus className="h-4 w-4" />
             Add Recurring
@@ -349,10 +369,17 @@ export function Settings() {
                   className={`flex items-center justify-between rounded-lg border p-3 ${rec.is_active ? "" : "opacity-60"}`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-xl">{rec.category.icon}</span>
+                    <span className="text-xl">
+                      {(rec.kind === "income" ? rec.income_category : rec.category)?.icon}
+                    </span>
                     <div>
                       <p className="font-medium">
                         {rec.name}
+                        {rec.kind === "income" && (
+                          <span className="ml-2 rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-normal text-emerald-700 dark:text-emerald-400">
+                            Income
+                          </span>
+                        )}
                         {!rec.is_active && (
                           <span className="ml-2 text-xs font-normal text-muted-foreground">
                             (paused)
@@ -478,7 +505,9 @@ export function Settings() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingRecurring ? "Edit Recurring Expense" : "Add Recurring Expense"}
+              {editingRecurring
+                ? `Edit Recurring ${editingRecurring.kind === "income" ? "Income" : "Expense"}`
+                : "Add Recurring Item"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -501,13 +530,32 @@ export function Settings() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Category *</Label>
+              <Label htmlFor="recurring-kind">Type *</Label>
+              <Select
+                value={recurringKind}
+                onValueChange={(v) => {
+                  setRecurringKind(v as RecurringKind);
+                  setRecurringCategoryId("");
+                }}
+                disabled={!!editingRecurring}
+              >
+                <SelectTrigger id="recurring-kind">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="expense">Expense (a bill)</SelectItem>
+                  <SelectItem value="income">Income (e.g. salary)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recurring-category">Category *</Label>
               <Select value={recurringCategoryId} onValueChange={setRecurringCategoryId}>
-                <SelectTrigger>
+                <SelectTrigger id="recurring-category">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((cat) => (
+                  {(recurringKind === "income" ? incomeCategories : categories).map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       <span className="flex items-center gap-2">
                         <span>{cat.icon}</span>

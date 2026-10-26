@@ -261,12 +261,27 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
 - **Out of scope:** multiple currencies, and splitting one income across goals automatically.
 
 ### Checklist
-- [ ] Migration: 4 new tables + `recurring_expenses` extension + default income categories for existing users
-- [ ] Models/schemas/routers, all user-scoped; services for cashflow and goals
-- [ ] Mark paid for recurring expense and income (creates the record, advances due)
-- [ ] CSV export with the `Type` column
-- [ ] Tests: CRUD, validation, isolation for every new table, cashflow edge cases (no income, negative, contributions don't affect spending/Saved), goal states (completed, no deadline, overdue, on track, behind), withdrawal below 0 refused, mark-paid due advance for weekly/monthly/31st/December
-- [ ] UI: /income, /goals, dashboard cashflow row + goals card, Settings income categories, recurring type + Mark paid; Playwright flow for income → Saved
+*Verified: backend **179 passed, 98.3% coverage**, ruff/mypy clean, `alembic check` (no drift), migration up/down/up in the test run and applied to an existing DB (5 users → 25 default income categories, the existing recurring item → `kind='expense'`). Frontend: `tsc`, ESLint, Prettier, **50 unit tests**, production build. **E2E 6/6** on a production build. All pre-commit hooks pass. Not checked by hand in a browser.*
+- [x] Migration `e5a1c7d9b2f4`: `income_categories`, `incomes`, `savings_goals`, `goal_contributions` + `recurring_expenses` (`kind`, `income_category_id`, nullable `category_id`, `last_paid_on`, CHECK that the category matches the kind). Default income categories seeded for existing users. Nothing changed or removed in existing data.
+- [x] Models (typed `Mapped`), schemas, routers (`/income-categories`, `/incomes`, `/goals` + `/contributions`, `/recurring/{id}/mark-paid`, `/stats/cashflow`), all user-scoped. Logic lives in `app/services/cashflow.py` and `app/services/goals.py` for the assistant to reuse.
+- [x] **Mark paid / received**: creates the expense or income through the normal validation, records `last_paid_on` = that cycle's due date, and `next_due` and Upcoming skip paid cycles (paying early included). Changing the schedule resets it. Paused items refuse.
+- [x] CSV export includes income, with `Type` appended as the last column.
+- [x] Tests:
+  - CRUD and validation (same money and date rules as expenses)
+  - isolation for every new table and endpoint, including mark-paid and the export
+  - cashflow: positive month, negative month (`saved` −500.5), no income (`savings_rate: null`), empty month, leap February, month format
+  - **a contribution leaves spending, budgets and Saved unchanged**, and deleting a goal frees its allocation
+  - goal states: completed (incl. no or past deadline), no deadline, overdue, deadline today, on track vs behind, at least 1 month, round-up
+  - withdrawals: can't take a goal below 0, including by deleting a contribution
+  - `next_unpaid_due` for monthly / 31st in Feb / leap year / December / weekly / New Year
+- [x] UI:
+  - `/income` (month filter, total, add/edit/delete, inline new category)
+  - `/goals` (cards, state badge, ৳/month needed, add money / take back, archive / restore, delete dialog that explains contributions)
+  - dashboard "This month" row (Income · Spent · **Saved / "Overspent by ৳X"** · savings rate **"—"** without income, "Add your income" prompt) + Goals card
+  - Upcoming shows bills and income with **Mark paid / Mark received**
+  - Settings: Income Categories card; recurring dialog with an Expense/Income type
+  - Navbar: Income, Goals (icon-only below `lg`, names kept for screen readers)
+- [x] Playwright: income → Saved 75.0%, goal contribution leaves Saved at ৳7,500 with "৳3,000 set aside for goals", overspend shows "Overspent by ৳1,500", and recurring income → Mark received → income ৳5,000 and gone from Upcoming.
 
 ## Phase A1 — Assistant backend core (see docs/ASSISTANT_DESIGN.md)
 - [ ] `LLMClient` (OpenRouter via `openai` SDK): fallbacks, `provider` privacy routing, attribution headers, usage/cost parsing, error mapping (402/429/502/503/timeout/mid-stream)

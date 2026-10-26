@@ -31,6 +31,7 @@ class StatsSummary(BaseModel):
 
 class UpcomingReminder(BaseModel):
     id: str
+    kind: Literal["expense", "income"]
     name: str
     amount: Money
     due_date: date
@@ -40,3 +41,18 @@ class UpcomingReminder(BaseModel):
 
 class UpcomingReminderListResponse(BaseModel):
     upcoming: list[UpcomingReminder]
+
+
+class CashflowResponse(BaseModel):
+    """Money in vs out for a month. Goal contributions are allocations of
+    savings, so they never change `spent` or `saved`."""
+
+    month: str  # YYYY-MM
+    start_date: date
+    end_date: date
+    income: Money
+    spent: Money
+    saved: Money  # income - spent; negative means overspent
+    savings_rate: Optional[float]  # saved / income * 100; null when there is no income
+    allocated_to_goals: Money
+    unallocated: Money
