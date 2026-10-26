@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "screenshots": "playwright test -c playwright.screenshots.config.ts && uv run --no-project --with pillow python screenshots/optimize.py ../docs/screenshots"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.2.1",
