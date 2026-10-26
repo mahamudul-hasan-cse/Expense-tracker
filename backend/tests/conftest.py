@@ -17,6 +17,9 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["APP_ENV"] = "test"
 # Rate limits are tested explicitly in test_hardening.py
 os.environ["RATE_LIMIT_ENABLED"] = "false"
+# Never let tests reach the real AI provider, even if backend/.env has a key.
+# (Env vars take precedence over .env; the real LLMClient also refuses APP_ENV=test.)
+os.environ["OPENROUTER_API_KEY"] = ""
 
 import pytest  # noqa: E402
 from alembic import command  # noqa: E402

@@ -42,7 +42,7 @@ Every request sends:
   - `require_parameters` routes only to providers that support `tools`.
   - `zdr: true` limits routing to Zero Data Retention endpoints. It defaults to on; if a chosen model has no ZDR endpoint, requests fail with 404/503, and the eval script catches that.
 - `extra_body.session_id=<conversation id>`, for sticky routing so the prompt cache stays warm.
-- Headers `HTTP-Referer: ASSISTANT_APP_URL` and `X-Title: ASSISTANT_APP_NAME`. I'll check the exact attribution header names against the docs when implementing.
+- Headers `HTTP-Referer: ASSISTANT_APP_URL`, `X-OpenRouter-Title: ASSISTANT_APP_NAME` (current name; `X-Title` is legacy) and `X-OpenRouter-App-Visibility: hidden` (keeps the app out of public rankings).
 - `max_tokens=ASSISTANT_MAX_OUTPUT_TOKENS`, plus an overall `timeout=ASSISTANT_TIMEOUT_SECONDS`.
 
 **Usage and cost:** these come from the `usage` object, which OpenRouter now always includes; for streams it's in the last chunk. Fields used: `prompt_tokens`, `completion_tokens`, `prompt_tokens_details.cached_tokens`, `cost` (USD).
@@ -195,7 +195,7 @@ ASSISTANT_APP_URL=http://localhost:3000
 ASSISTANT_APP_NAME=Wallet Agent
 ASSISTANT_REQUIRE_ZDR=true
 ASSISTANT_DAILY_MESSAGE_LIMIT=20
-ASSISTANT_MAX_OUTPUT_TOKENS=800
+ASSISTANT_MAX_OUTPUT_TOKENS=1600   # raised from 800: reasoning tokens count toward it
 ASSISTANT_MAX_TOOL_CALLS=8
 ASSISTANT_HISTORY_MESSAGES=20
 ASSISTANT_TIMEOUT_SECONDS=60
@@ -272,4 +272,4 @@ A test also asserts that guard 3 fires. CI never gets a real key.
 
 Recommendation: *after the results*, with the average cost per message and suggested final limits. `ASSISTANT_MODEL` is set only after you approve.
 
-**Dev spend tally:** $0.00 of $2.00. (Step 0 used only the free `/key` and `/credits` endpoints.)
+**Dev spend tally:** $0.0135 of $2.00 after Phase A1 (3 example conversations, diagnosis runs, streaming checks). See `docs/ASSISTANT_EXAMPLES.md`.

@@ -1,12 +1,14 @@
 from functools import lru_cache
 from typing import Literal, Optional
 
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Only usable outside production; production must set SECRET_KEY explicitly
 DEV_SECRET_KEY = "dev-insecure-secret-key-change-me-in-production"
 DEV_DATABASE_URL = "postgresql://wallet_user:wallet_pass@localhost:5432/wallet_agent"
+# Documented default (shortlist candidate A); ASSISTANT_MODEL overrides it
+DEFAULT_ASSISTANT_MODEL = "anthropic/claude-haiku-5.5"
 
 
 class Settings(BaseSettings):
@@ -43,6 +45,30 @@ class Settings(BaseSettings):
     rate_limit_login_failures: str = "10/hour"
     # memory:// is per-process; use e.g. redis://host:6379 with several workers/instances
     rate_limit_storage_uri: str = "memory://"
+
+    # AI assistant (OpenRouter). Disabled when the key is empty; the app still runs.
+    # SecretStr keeps the key out of reprs and logs.
+    openrouter_api_key: SecretStr = SecretStr("")
+    # Empty = the documented default (DEFAULT_ASSISTANT_MODEL); production picks from the eval
+    assistant_model: str = ""
+    assistant_fallback_models: str = ""  # comma-separated
+    assistant_app_url: str = "http://localhost:3000"
+    assistant_app_name: str = "Wallet Agent"
+    assistant_require_zdr: bool = True
+    assistant_daily_message_limit: int = 20
+    assistant_global_daily_budget_usd: float = 1.0
+    # Includes hidden reasoning tokens (Haiku 5.5 used ~150-460 of them per answer in testing)
+    assistant_max_output_tokens: int = 1600
+    assistant_max_tool_calls: int = 8
+    assistant_history_messages: int = 20
+    assistant_timeout_seconds: float = 60.0
+
+    @property
+    def assistant_models(self) -> list[str]:
+        """Main model first, then fallbacks, for OpenRouter's `models` routing."""
+        main = self.assistant_model.strip() or DEFAULT_ASSISTANT_MODEL
+        extra = [m.strip() for m in self.assistant_fallback_models.split(",") if m.strip()]
+        return [main, *[m for m in extra if m != main]]
 
     @property
     def origins(self) -> list[str]:

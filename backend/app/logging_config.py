@@ -52,6 +52,9 @@ def configure_logging(level: str, json_logs: bool) -> None:
     # Our request middleware logs every request; silence uvicorn's duplicate access log
     logging.getLogger("uvicorn.access").handlers = []
     logging.getLogger("uvicorn.access").propagate = False
+    # The OpenAI SDK / httpx can log request details at DEBUG; never let prompts or headers reach the logs
+    for name in ("openai", "httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     for name in ("uvicorn", "uvicorn.error"):
         logging.getLogger(name).handlers = []
         logging.getLogger(name).propagate = True

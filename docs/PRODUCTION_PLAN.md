@@ -284,12 +284,39 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
 - [x] Playwright: income → Saved 75.0%, goal contribution leaves Saved at ৳7,500 with "৳3,000 set aside for goals", overspend shows "Overspent by ৳1,500", and recurring income → Mark received → income ৳5,000 and gone from Upcoming.
 
 ## Phase A1 — Assistant backend core (see docs/ASSISTANT_DESIGN.md)
-- [ ] `LLMClient` (OpenRouter via `openai` SDK): fallbacks, `provider` privacy routing, attribution headers, usage/cost parsing, error mapping (402/429/502/503/timeout/mid-stream)
-- [ ] Read-only tools with server-bound user_id, argument clamping, user text marked as data; tool tests incl. isolation
-- [ ] Migration: conversations, messages, usage, insights, `users.assistant_enabled`
-- [ ] Chat SSE endpoint + agent loop (max tool calls, one retry for malformed calls, disconnect handling); history endpoints
-- [ ] Per-user daily cap, global daily USD budget, max output tokens; disabled mode without a key; `assistant-usage` CLI
-- [ ] Tests with a fake LLMClient (no network)
+*Verified: backend **241 passed, 96.4% coverage**, ruff/mypy clean, `alembic check`. Real API: 3 example conversations (`docs/ASSISTANT_EXAMPLES.md`) and SSE streaming measured through the Next.js `/api` rewrite in **dev and a production build** (incremental, not buffered, not compressed). **Real spend $0.0135 of $2.***
+- [x] `app/assistant/llm_client.py` (OpenRouter via the `openai` SDK; the only provider-aware file):
+  - fallbacks through `models`, `provider: {data_collection: deny, require_parameters, zdr}`
+  - attribution headers `HTTP-Referer` and `X-OpenRouter-Title`, plus `X-OpenRouter-App-Visibility: hidden`
+  - `session_id` for cache-sticky routing
+  - usage, cost, cached and reasoning tokens
+  - typed errors for 402, 429 (with Retry-After), 408, 401/403, 5xx, mid-stream errors and timeouts
+  - refuses to construct in `APP_ENV=test`; the key is a `SecretStr`
+- [x] 10 read-only tools (`app/assistant/tools.py`), defined in OpenAI function-calling JSON schema:
+  - user_id is bound on the server; unknown args are rejected, so a model-supplied `user_id` fails
+  - date ranges are clamped to today, at most 366 days, nothing before 2015; limits are at most 50
+  - user text is flattened and truncated
+  - all maths in SQL or Python
+  - `propose_expense` never writes
+- [x] Migration `f7b3d2a8c6e1`: conversations, messages, usage (no content), insights, `users.assistant_enabled` (opt-in, default false)
+- [x] SSE `POST /assistant/chat`:
+  - events: conversation, status, token, proposal, done/error
+  - at most 8 tool calls, then tools are switched off to force an answer
+  - one retry for malformed tool calls
+  - an interrupted turn is saved on disconnect
+  - "answer cut short" note when the model hits the length limit
+  - history: status, opt-in toggle, conversations list/get/delete/clear-all, proposal confirm/cancel
+- [x] Limits:
+  - per-user daily cap (20) and global daily USD budget ($1), both by Asia/Dhaka day
+  - max output tokens 1600, raised from 800 after real testing: Haiku's hidden reasoning used up to 464 tokens and cut answers short
+- [x] Disabled mode without a key; `uv run python -m app.cli assistant-usage --days N`
+- [x] Tests with a fake LLM (no network), 15 `LLMClient` parsing/error tests with a fake SDK stream, and tool tests against Postgres including isolation
+- [x] **Bugs found with the real API:**
+  1. **slowapi's ASGI middleware re-sent `http.response.start` for every chunk of a streaming response.** Real uvicorn crashed the request (TestClient tolerated it). This broke the assistant stream, and **every CSV export since Phase 3 logged a crash**. Replaced with a stream-safe `RateLimitMiddleware`; a strict-ASGI regression test fails on the old middleware and passes on the fix.
+  2. Answers cut off by the 800-token limit (reasoning tokens). Raised the limit, added the cut-short note, and a test.
+  3. `detect_unusual_spending` flagged monthly bills (rent) over short windows. Now needs at least 3 expenses unless the category is new; regression test added.
+  4. `assistant-usage` relied on the DB knowing the `Asia/Dhaka` name. Now grouped in Python.
+- Dev tools: `scripts/try_assistant.py` (real calls with a full trace), `scripts/check_streaming.py` (SSE timing through a proxy)
 
 ## Phase A2 — Assistant frontend
 - [ ] `/assistant` page + floating button; streamed markdown (raw HTML off), stop, retry, status line
