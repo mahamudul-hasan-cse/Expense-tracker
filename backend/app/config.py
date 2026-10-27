@@ -51,7 +51,9 @@ class Settings(BaseSettings):
     openrouter_api_key: SecretStr = SecretStr("")
     # Chosen from the eval (docs/ASSISTANT_EVAL.md); empty also means DEFAULT_ASSISTANT_MODEL
     assistant_model: str = "anthropic/claude-haiku-5.5"
-    assistant_fallback_models: str = ""  # comma-separated
+    # Comma-separated, tried in order when the main model fails. Gemini 3.5 Flash Lite scored
+    # 18/18 in the eval and is a different vendor, so it covers an Anthropic outage.
+    assistant_fallback_models: str = "google/gemini-3.5-flash-lite"
     assistant_app_url: str = "http://localhost:3000"
     assistant_app_name: str = "Wallet Agent"
     assistant_require_zdr: bool = True
