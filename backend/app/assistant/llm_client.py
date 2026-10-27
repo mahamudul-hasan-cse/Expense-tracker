@@ -177,6 +177,10 @@ class LLMClient:
             # exclude: the reasoning text itself is never returned to us.
             extra_body["reasoning"] = {"effort": self.settings.assistant_reasoning_effort, "exclude": True}
 
+        options: dict[str, Any] = {}
+        if allow_tools and self.settings.assistant_parallel_tool_calls:
+            options["parallel_tool_calls"] = True
+
         started = time.monotonic()
         partial: dict[int, dict[str, str]] = {}
         usage = Usage(model=None)
@@ -191,6 +195,7 @@ class LLMClient:
                 max_tokens=max_tokens,
                 stream=True,
                 extra_body=extra_body,
+                **options,
             )
             async for chunk in stream:
                 if chunk.model:

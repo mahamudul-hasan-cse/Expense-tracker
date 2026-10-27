@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     # OpenRouter `reasoning.effort` (none|minimal|low|medium|high); empty = the model's default.
     # Set from the A4 latency measurement; reasoning text is never sent back to the app.
     assistant_reasoning_effort: Literal["", "none", "minimal", "low", "medium", "high"] = ""
+    # Send OpenRouter `parallel_tool_calls: true`. Off: Anthropic and OpenAI models already
+    # batch independent tool calls by default, and with our privacy routing (zdr +
+    # require_parameters) no Haiku 5.5 endpoint accepts the explicit flag (all requests fail).
+    assistant_parallel_tool_calls: bool = False
     assistant_max_tool_calls: int = 8
     assistant_history_messages: int = 20
     assistant_timeout_seconds: float = 60.0

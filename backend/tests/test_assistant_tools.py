@@ -131,6 +131,10 @@ def test_spending_summary_by_category(seeded):
     assert by["Random"]["total"] == 4300 and by["Random"]["share_pct"] == 66.2
     assert by["Rickshaw"]["total"] == 1200 and by["Rickshaw"]["count"] == 20
     assert r["by_category"][0]["category"] == "Random"  # sorted by total
+    # Catch-all categories carry their largest entries (saves a list_expenses round)
+    assert [e["amount"] for e in by["Random"]["largest_entries"]] == [4000, 300]
+    assert by["Random"]["largest_entries"][0]["note"] == "New headphones"
+    assert "largest_entries" not in by["Rickshaw"]
 
 
 def test_spending_summary_grouped_by_month_and_day_limit(seeded):

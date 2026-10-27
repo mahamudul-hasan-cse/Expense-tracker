@@ -122,7 +122,8 @@ export function AssistantChat() {
         proposal: null,
         proposalStatus: null,
         state: "streaming",
-        statusText: "Thinking…",
+        // Until the server's first status line arrives; same language as the question
+        statusText: /[ঀ-৿]/.test(text) ? "ভাবছি…" : "Thinking…",
       },
     ]);
 

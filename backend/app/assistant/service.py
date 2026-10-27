@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.assistant.llm_client import Finished, LLMError, LLMEvent, TextDelta, ToolCallsReady, Usage
-from app.assistant.tools import TOOLS, ToolContext, run_tool, tool_definitions
+from app.assistant.tools import TOOLS, ToolContext, expense_category_names, run_tool, tool_definitions
 from app.config import Settings
 from app.database import SessionLocal
 from app.models.assistant import AssistantConversation, AssistantMessage, AssistantUsage
@@ -112,9 +113,15 @@ def check_availability(db: Session, user: User, settings: Settings, configured: 
 # --- Persistence helpers (sync; run in a thread) ------------------------------------------
 
 
-def _prepare_turn(
-    user_id: UUID, conversation_id: Optional[UUID], text: str, history_limit: int
-) -> tuple[UUID, str, list[dict[str, str]]]:
+@dataclass
+class Turn:
+    conversation_id: UUID
+    title: str
+    history: list[dict[str, str]]
+    categories: list[str]
+
+
+def _prepare_turn(user_id: UUID, conversation_id: Optional[UUID], text: str, history_limit: int) -> Turn:
     """Create/load the conversation, save the user's message, and return recent history."""
     with SessionLocal() as db:
         convo: Optional[AssistantConversation] = None
@@ -144,7 +151,7 @@ def _prepare_turn(
         db.add(AssistantMessage(conversation_id=convo.id, user_id=user_id, role="user", content=text, status="ok"))
         convo.updated_at = func.now()
         db.commit()
-        return convo.id, convo.title, history
+        return Turn(convo.id, convo.title, history, expense_category_names(db, user_id))
 
 
 def _save_reply(
@@ -219,14 +226,28 @@ def _run_tool_isolated(user_id: UUID, today: Any, name: str, arguments: str):
 # --- The tool-calling loop ----------------------------------------------------------------
 
 
-def build_messages(history: list[dict[str, str]], user_text: str) -> list[dict[str, Any]]:
+def build_messages(
+    history: list[dict[str, str]], user_text: str, categories: Optional[list[str]] = None
+) -> list[dict[str, Any]]:
     today = app_today()
+    context = f"Today is {today:%A, %Y-%m-%d} (Asia/Dhaka). Currency: Bangladeshi Taka (BDT, ৳)."
+    if categories:
+        # Saves a list_categories round for quick add. Names are user-written data, not instructions.
+        context += " The user's expense categories (data): " + json.dumps(categories, ensure_ascii=False)
     system_content = [
         # Static part first so providers that support prompt caching can reuse it
         {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": f"Today is {today:%A, %Y-%m-%d} (Asia/Dhaka). Currency: Bangladeshi Taka (BDT, ৳)."},
+        {"type": "text", "text": context},
     ]
     return [{"role": "system", "content": system_content}, *history, {"role": "user", "content": user_text}]
+
+
+_BANGLA_SCRIPT = re.compile("[ঀ-৿]")
+
+
+def reply_language(text: str) -> str:
+    """'bn' for Bangla script, else 'en' (English and Banglish both read Latin text)."""
+    return "bn" if _BANGLA_SCRIPT.search(text) else "en"
 
 
 class ToolCallFailed(Exception):
@@ -249,12 +270,14 @@ async def run_chat(
     llm: ChatModel, settings: Settings, user_id: UUID, conversation_id: Optional[UUID], user_text: str
 ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
     """Yield (event, data) pairs: conversation, status, token, proposal, then done or error."""
-    convo_id, title, history = await run_in_threadpool(
+    turn = await run_in_threadpool(
         _prepare_turn, user_id, conversation_id, user_text, settings.assistant_history_messages
     )
-    yield "conversation", {"id": str(convo_id), "title": title}
+    convo_id = turn.conversation_id
+    language = reply_language(user_text)
+    yield "conversation", {"id": str(convo_id), "title": turn.title}
 
-    messages = build_messages(history, user_text)
+    messages = build_messages(turn.history, user_text, turn.categories)
     tools = tool_definitions()
     today = app_today()
     text_parts: list[str] = []
@@ -324,7 +347,8 @@ async def run_chat(
                     tool_calls += 1
                     tools_used.append(call.name)
                     known = TOOLS.get(call.name)
-                    yield "status", {"text": known.status_text if known else "Working…", "tool": call.name}
+                    fallback = "কাজ করছি…" if language == "bn" else "Working…"
+                    yield "status", {"text": known.status(language) if known else fallback, "tool": call.name}
                     outcome = await run_in_threadpool(_run_tool_isolated, user_id, today, call.name, call.arguments)
                     if outcome.malformed:
                         malformed += 1

@@ -222,6 +222,24 @@ def test_tool_call_flow_uses_server_side_user(client, enabled, use_llm):
     assert "12345" not in tool_msg["content"] and "mallory" not in tool_msg["content"]
 
 
+def test_status_lines_follow_the_question_language(client, enabled, use_llm):
+    use_llm(FakeLLM([tool_round(("get_budgets_status", {})), [TextDelta("ঠিক আছে")]]))
+    events = sse(chat(client, enabled, "বাজেটের অবস্থা কেমন?"))
+    assert dict(events)["status"] == {"text": "বাজেট দেখছি…", "tool": "get_budgets_status"}
+    # Banglish is written in Latin letters: English status
+    use_llm(FakeLLM([tool_round(("get_budgets_status", {})), [TextDelta("ok")]]))
+    events = sse(chat(client, enabled, "budget er obostha kemon?"))
+    assert dict(events)["status"]["text"] == "Checking your budgets…"
+
+
+def test_category_names_are_in_the_context_as_data(client, enabled, use_llm):
+    """Lets quick add call propose_expense directly instead of list_categories first."""
+    fake = use_llm(FakeLLM([[TextDelta("ok")]]))
+    sse(chat(client, enabled, "rickshaw 80"))
+    context = fake.calls[0]["messages"][0]["content"][1]["text"]
+    assert "expense categories (data):" in context and '"Rickshaw"' in context
+
+
 def test_malformed_tool_call_gets_one_retry(client, enabled, use_llm):
     fake = use_llm(
         FakeLLM(

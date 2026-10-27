@@ -348,6 +348,24 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
 
   Most of the wait is 2–3 tool rounds, each with hidden reasoning. **Recommendation: keep the default** (`ASSISTANT_REASONING_EFFORT` unset): `low` doesn't help Haiku, `none` hurts language-matching. The UI shows tool status lines ("Checking your spending…") during the wait. New setting `ASSISTANT_REASONING_EFFORT` (none|minimal|low|medium|high) is sent as OpenRouter `reasoning: {effort, exclude: true}` only when set; re-measure per model in A4.
 
+### Assistant speed (2026-10-27, owner: keep default reasoning)
+*Verified: backend 253 passed; real spend for this step **$0.0304** (baseline + 3 measurement runs + a routing probe); key total $0.0572 of $2.*
+- [x] **Live status line in the user's language:** each tool sends an English and a Bangla status ("বাজেট দেখছি…", "আগের সময়ের সাথে তুলনা করছি…"); Bangla script → Bangla, English/Banglish → English. The UI's first placeholder ("Thinking…" / "ভাবছি…") follows the same rule; the line is replaced by the answer as soon as text starts.
+- [x] **Parallel tool calls:** Haiku already batches independent lookups (3–4 tools in one round). Sending OpenRouter's explicit `parallel_tool_calls: true` makes **every request fail** under our privacy routing ("No endpoints found that can handle the requested parameters"), so `ASSISTANT_PARALLEL_TOOL_CALLS` exists but is **off**.
+- [x] **Fewer rounds instead.** Tool names per round showed each question making a dependent second round:
+  - quick add called `list_categories` before `propose_expense` → the user's category names are now in the per-request context (as data);
+  - the "split Random" advice called `list_expenses` → `get_spending_summary` now includes the largest entries of catch-all categories;
+  - prompt: plan all lookups up front and request them in one turn; no "Let me check…" text before tools.
+- [x] **Before / after** (Haiku 5.5, default reasoning, average of 2 runs each, same 3 questions):
+
+  | Question | LLM rounds | First status | First text | Total | Cost/message |
+  |---|---|---|---|---|---|
+  | #1 EN compare + save | 3 → **2** | 3.0s → 2.8s | 10.4s → **7.1s** | 13.2s → **9.7s** | ~$0.0023 → ~$0.0015 |
+  | #2 BN budgets | 3 → **2** | 2.5s → 1.9s | 9.1s → **4.5s** | 12.5s → **9.3s** | ~$0.0017 → ~$0.0017 |
+  | #3 BN quick add | 3 → **2** | 1.7s → 1.6s | 5.0s → **2.6s** | 5.7s → **3.0s** | ~$0.0008 → ~$0.0003 |
+
+  Small sample (2 runs); provider latency varies ±2s between runs.
+
 ## Phase A2 — Assistant frontend
 - [x] `/assistant` page + floating button (only when the server has a key; adds bottom space so it never covers row actions)
 - [x] Streamed answers rendered by a small Markdown renderer that builds React elements only (no HTML from the model, ever); tool status line ("Checking your spending…"); Stop (aborts the stream; the server saves it as interrupted) and Retry

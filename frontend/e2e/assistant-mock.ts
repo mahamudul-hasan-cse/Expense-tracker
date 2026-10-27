@@ -103,17 +103,23 @@ function replyFor(message: string, conversationId: string, n: number): [string, 
   if (/২৫০|250|taka|টাকা/.test(message)) {
     return [
       convo,
-      ["status", { text: "Checking your categories…", tool: "list_categories" }],
-      ["status", { text: "Preparing the expense…", tool: "propose_expense" }],
+      ["status", { text: "খরচটি প্রস্তুত করছি…", tool: "propose_expense" }],
       ["proposal", QUICK_ADD_PROPOSAL],
       ...tokens(REPLIES.quickAdd),
       ["done", { message_id: messageId, model: "mock/model", proposal: QUICK_ADD_PROPOSAL }],
     ];
   }
-  const text = /[ঀ-৿]/.test(message) ? REPLIES.bangla : REPLIES.english;
+  const bangla = /[ঀ-৿]/.test(message);
+  const text = bangla ? REPLIES.bangla : REPLIES.english;
   return [
     convo,
-    ["status", { text: "Checking your spending…", tool: "get_spending_summary" }],
+    [
+      "status",
+      {
+        text: bangla ? "বাজেট দেখছি…" : "Checking your budgets…",
+        tool: "get_budgets_status",
+      },
+    ],
     ...tokens(text),
     ["done", { message_id: messageId, model: "mock/model", proposal: null }],
   ];

@@ -128,6 +128,23 @@ def test_reasoning_effort_is_sent_only_when_set():
     assert seen["extra_body"]["reasoning"] == {"effort": "low", "exclude": True}
 
 
+def test_parallel_tool_calls_flag_is_opt_in():
+    """Off by default: with zdr + require_parameters no Haiku endpoint accepts it (measured)."""
+    seen = {}
+
+    async def create(**kwargs):
+        seen.clear()
+        seen.update(kwargs)
+        return FakeStream([chunk(content="ok", finish="stop")])
+
+    collect(make_client(create))
+    assert "parallel_tool_calls" not in seen
+    collect(make_client(create, assistant_parallel_tool_calls=True))
+    assert seen["parallel_tool_calls"] is True
+    collect(make_client(create, assistant_parallel_tool_calls=True), allow_tools=False)
+    assert "parallel_tool_calls" not in seen
+
+
 def test_mid_stream_error_finish_reason():
     async def create(**kwargs):
         return FakeStream([chunk(content="par"), chunk(finish="error")])

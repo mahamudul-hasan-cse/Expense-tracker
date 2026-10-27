@@ -88,6 +88,18 @@ test("stop keeps the partial state and offers retry", async ({ page }) => {
   await expect(chat(page).getByRole("button", { name: "Retry" })).toBeVisible();
 });
 
+test("the live status line follows the question's language", async ({ page }) => {
+  await mockAssistant(page, { replyDelayMs: 1500 });
+  await signUp(page);
+  await page.goto("/assistant");
+  await input(page).fill("এই মাসে কত খরচ হলো?");
+  await input(page).press("Enter");
+  await expect(chat(page).getByText("ভাবছি…")).toBeVisible();
+  // Replaced by the answer once it starts
+  await expect(chat(page).locator("strong", { hasText: "বাজেটের অবস্থা" })).toBeVisible();
+  await expect(chat(page).getByText("ভাবছি…")).toHaveCount(0);
+});
+
 test.describe("phone width (375px)", () => {
   test.use({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
 

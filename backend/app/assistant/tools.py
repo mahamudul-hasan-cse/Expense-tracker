@@ -128,6 +128,27 @@ def _by_category(ctx: ToolContext, start: date, end: date) -> dict[str, dict[str
     return {name: {"icon": icon, "total": Decimal(total), "count": int(count)} for name, icon, total, count in rows}
 
 
+CATCH_ALL_CATEGORIES = {"random", "other", "others", "misc", "miscellaneous", "general"}
+CATCH_ALL_ENTRIES = 6
+
+
+def _largest_entries(ctx: ToolContext, category: str, start: date, end: date) -> list[dict[str, Any]]:
+    rows = (
+        ctx.db.query(Expense.amount, Expense.note, Expense.expense_date)
+        .join(Category, Category.id == Expense.category_id)
+        .filter(
+            Expense.user_id == ctx.user_id,
+            Category.name == category,
+            Expense.expense_date >= start,
+            Expense.expense_date <= end,
+        )
+        .order_by(Expense.amount.desc(), Expense.expense_date.desc())
+        .limit(CATCH_ALL_ENTRIES)
+        .all()
+    )
+    return [{"amount": _num(a), "note": _text(n), "date": str(d)} for a, n, d in rows]
+
+
 # --- Tools -----------------------------------------------------------------------------
 
 
@@ -161,6 +182,11 @@ def get_spending_summary(ctx: ToolContext, args: SpendingSummaryArgs) -> dict[st
             }
             for n, g in groups
         ]
+        # Catch-all categories hide where money goes; include their largest entries now so
+        # the model can suggest a split without a second round of tool calls.
+        for item in result["by_category"]:
+            if item["category"].strip().lower() in CATCH_ALL_CATEGORIES:
+                item["largest_entries"] = _largest_entries(ctx, item["category"], start, end)
     else:
         if args.group_by == "day" and days > MAX_DAY_GROUPING:
             raise ToolArgError(f"group_by=day is limited to {MAX_DAY_GROUPING} days; use week or month")
@@ -537,13 +563,23 @@ def propose_expense(ctx: ToolContext, args: ProposeExpenseArgs) -> dict[str, Any
 # --- Registry ----------------------------------------------------------------------------
 
 
+def expense_category_names(db: Session, user_id: UUID, limit: int = 60) -> list[str]:
+    """The user's expense category names (as plain data), for the per-request context."""
+    rows = db.query(Category.name).filter(Category.user_id == user_id).order_by(Category.name).limit(limit).all()
+    return [_text(name) or "" for (name,) in rows]
+
+
 @dataclass(frozen=True)
 class Tool:
     name: str
     description: str
     args_model: type[_Args]
     fn: Callable[[ToolContext, Any], dict[str, Any]]
-    status_text: str  # shown in the UI while the tool runs
+    status_text: str  # shown in the UI while the tool runs (English / Banglish questions)
+    status_text_bn: str  # the same, for questions written in Bangla script
+
+    def status(self, language: str) -> str:
+        return self.status_text_bn if language == "bn" else self.status_text
 
 
 TOOLS: dict[str, Tool] = {
@@ -555,13 +591,15 @@ TOOLS: dict[str, Tool] = {
             SpendingSummaryArgs,
             get_spending_summary,
             "Adding up your spending…",
+            "আপনার খরচ হিসাব করছি…",
         ),
         Tool(
             "compare_periods",
             "Compare total and per-category spending between two date ranges.",
             ComparePeriodsArgs,
             compare_periods,
-            "Comparing periods…",
+            "Comparing with the other period…",
+            "আগের সময়ের সাথে তুলনা করছি…",
         ),
         Tool(
             "list_expenses",
@@ -569,6 +607,7 @@ TOOLS: dict[str, Tool] = {
             ListExpensesArgs,
             list_expenses,
             "Looking through your expenses…",
+            "আপনার খরচগুলো দেখছি…",
         ),
         Tool(
             "get_budgets_status",
@@ -576,6 +615,7 @@ TOOLS: dict[str, Tool] = {
             BudgetsStatusArgs,
             get_budgets_status,
             "Checking your budgets…",
+            "বাজেট দেখছি…",
         ),
         Tool(
             "get_recurring_items",
@@ -583,6 +623,7 @@ TOOLS: dict[str, Tool] = {
             RecurringArgs,
             get_recurring_items,
             "Checking recurring bills…",
+            "নিয়মিত বিল দেখছি…",
         ),
         Tool(
             "detect_unusual_spending",
@@ -590,6 +631,7 @@ TOOLS: dict[str, Tool] = {
             UnusualArgs,
             detect_unusual_spending,
             "Looking for unusual spending…",
+            "অস্বাভাবিক খরচ খুঁজছি…",
         ),
         Tool(
             "list_categories",
@@ -597,6 +639,7 @@ TOOLS: dict[str, Tool] = {
             NoArgs,
             list_categories,
             "Checking your categories…",
+            "ক্যাটাগরি দেখছি…",
         ),
         Tool(
             "get_cashflow",
@@ -604,6 +647,7 @@ TOOLS: dict[str, Tool] = {
             CashflowArgs,
             get_cashflow_tool,
             "Checking income and savings…",
+            "আয় আর সঞ্চয় দেখছি…",
         ),
         Tool(
             "get_savings_goals",
@@ -611,6 +655,7 @@ TOOLS: dict[str, Tool] = {
             GoalsArgs,
             get_savings_goals,
             "Checking your goals…",
+            "সঞ্চয়ের লক্ষ্য দেখছি…",
         ),
         Tool(
             "propose_expense",
@@ -618,6 +663,7 @@ TOOLS: dict[str, Tool] = {
             ProposeExpenseArgs,
             propose_expense,
             "Preparing the expense…",
+            "খরচটি প্রস্তুত করছি…",
         ),
     ]
 }
