@@ -88,6 +88,29 @@ test("stop keeps the partial state and offers retry", async ({ page }) => {
   await expect(chat(page).getByRole("button", { name: "Retry" })).toBeVisible();
 });
 
+test("weekly insight on the dashboard; turning the assistant off in Settings hides it", async ({
+  page,
+}) => {
+  await mockAssistant(page);
+  await signUp(page);
+  const card = page.getByRole("region", { name: "This week's insight" });
+  await expect(card.locator("strong", { hasText: "You spent ৳6,850 this week" })).toBeVisible();
+  await expect(card.locator("li")).toHaveCount(3);
+
+  await page.goto("/settings");
+  const toggle = page.getByRole("switch", { name: "Use the assistant" });
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("button", { name: "Delete my chat history" }).click();
+  await page.getByRole("button", { name: "Delete everything" }).click();
+  await expect(page.getByText("Chat history deleted").first()).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "This week's insight" })).toHaveCount(0);
+});
+
 test("the live status line follows the question's language", async ({ page }) => {
   await mockAssistant(page, { replyDelayMs: 1500 });
   await signUp(page);

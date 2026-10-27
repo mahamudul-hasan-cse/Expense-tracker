@@ -1,5 +1,6 @@
 import json
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from functools import lru_cache
 from typing import Any, AsyncIterator, Literal, Optional
 from uuid import UUID
@@ -8,20 +9,29 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.assistant.llm_client import LLMClient
-from app.assistant.service import ChatModel, check_availability, messages_today, run_chat
+from app.assistant.llm_client import LLMClient, LLMError
+from app.assistant.service import (
+    ChatModel,
+    check_availability,
+    generate_weekly_insight,
+    messages_today,
+    run_chat,
+    spend_today,
+)
 from app.config import get_settings
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, get_user_category
 from app.errors import error_response
-from app.models.assistant import AssistantConversation, AssistantMessage
+from app.models.assistant import AssistantConversation, AssistantInsight, AssistantMessage
 from app.models.user import User
 from app.pagination import paginate
 from app.routers.expenses import add_expense
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate
 from app.schemas.pagination import PaginationInfo
+from app.timeutil import today as app_today
 
 router = APIRouter(prefix="/assistant", tags=["Assistant"])
 
@@ -227,10 +237,78 @@ def delete_conversation(
 
 @router.delete("/conversations", status_code=status.HTTP_204_NO_CONTENT)
 def delete_all_conversations(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Clear all chat history for this user (usage records without content are kept for cost accounting)."""
+    """Clear all chat history and cached insights for this user.
+
+    Usage records (no content) are kept for cost accounting.
+    """
     db.query(AssistantConversation).filter(AssistantConversation.user_id == current_user.id).delete()
+    db.query(AssistantInsight).filter(AssistantInsight.user_id == current_user.id).delete()
     db.commit()
     return None
+
+
+class InsightResponse(BaseModel):
+    content: str
+    generated_for: date
+    cached: bool
+
+
+@router.get("/insights/weekly", response_model=InsightResponse)
+async def weekly_insight(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    llm: Optional[ChatModel] = Depends(get_llm_client),
+):
+    """This week's short insight, generated at most once per Asia/Dhaka day and cached.
+
+    Counts toward the global daily budget, not the user's message limit.
+    """
+    settings = get_settings()
+    if llm is None or not current_user.assistant_enabled:
+        availability = check_availability(db, current_user, settings, configured=llm is not None)
+        return error_response(
+            availability.status_code,
+            availability.message or "Assistant unavailable",
+            [{"field": "reason", "message": availability.code}],
+        )
+    today = app_today()
+    cached = _todays_insight(db, current_user.id, today)
+    if cached:
+        return InsightResponse(content=cached.content, generated_for=today, cached=True)
+    if spend_today(db) >= Decimal(str(settings.assistant_global_daily_budget_usd)):
+        return error_response(
+            503,
+            "The assistant has reached today's usage limit. It will be back tomorrow.",
+            [{"field": "reason", "message": "daily_budget_reached"}],
+        )
+    user_id = current_user.id
+    try:
+        content = await generate_weekly_insight(llm, settings, user_id)
+    except LLMError as exc:
+        return error_response(503, exc.user_message, [{"field": "reason", "message": exc.code}])
+    if not content:
+        return error_response(503, "Couldn't write this week's insight. Try again later.", [])
+    db.add(AssistantInsight(user_id=user_id, kind="weekly", generated_for=today, content=content))
+    try:
+        db.commit()
+    except IntegrityError:  # another tab generated it at the same time: keep the first one
+        db.rollback()
+        existing = _todays_insight(db, user_id, today)
+        if existing:
+            return InsightResponse(content=existing.content, generated_for=today, cached=True)
+    return InsightResponse(content=content, generated_for=today, cached=False)
+
+
+def _todays_insight(db: Session, user_id: UUID, today: date) -> Optional[AssistantInsight]:
+    return (
+        db.query(AssistantInsight)
+        .filter(
+            AssistantInsight.user_id == user_id,
+            AssistantInsight.kind == "weekly",
+            AssistantInsight.generated_for == today,
+        )
+        .first()
+    )
 
 
 def _locked_proposal(db: Session, message_id: UUID, user: User) -> AssistantMessage:
@@ -277,6 +355,17 @@ def confirm_proposal(
         raise RequestValidationError(exc.errors(), body=changes) from exc
 
     expense = add_expense(db, current_user, expense_data)
+    category = get_user_category(db, expense.category_id, current_user)
+    # The card shows what was actually saved, including the user's edits
+    message.proposal = {
+        **proposal,
+        "amount": float(expense.amount),
+        "category_id": str(category.id),
+        "category_name": category.name,
+        "category_icon": category.icon,
+        "expense_date": str(expense.expense_date),
+        "note": expense.note,
+    }
     message.proposal_status = "confirmed"
     message.proposal_expense_id = expense.id
     db.commit()

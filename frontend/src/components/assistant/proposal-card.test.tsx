@@ -13,6 +13,12 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   api: {
     confirmProposal: (...a: unknown[]) => confirmProposal(...a),
     cancelProposal: (...a: unknown[]) => cancelProposal(...a),
+    getCategories: async () => ({
+      categories: [
+        { id: "c1", name: "Food", icon: "🍔", is_default: true },
+        { id: "c2", name: "Rickshaw", icon: "🛺", is_default: true },
+      ],
+    }),
   },
 }));
 
@@ -76,6 +82,25 @@ describe("ProposalCard", () => {
     await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(reply("confirmed")));
     expect(confirmProposal).toHaveBeenCalledTimes(1);
     expect(confirmProposal).toHaveBeenCalledWith("m1");
+  });
+
+  it("Edit opens the expense form prefilled and saves the edits through confirm", async () => {
+    confirmProposal.mockResolvedValue(reply("confirmed"));
+    const { onChange, user } = renderCard();
+    await user.click(screen.getByRole("button", { name: /Edit/ }));
+    const amount = await screen.findByLabelText(/Amount/);
+    expect(amount).toHaveValue(1250.5);
+    expect(screen.getByLabelText(/Note/)).toHaveValue("দুপুরের খাবার");
+    await user.clear(amount);
+    await user.type(amount, "1300");
+    await user.click(screen.getByRole("button", { name: "Save Expense" }));
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(confirmProposal).toHaveBeenCalledWith("m1", {
+      amount: 1300,
+      category_id: "c1",
+      note: "দুপুরের খাবার",
+      expense_date: "2026-10-27",
+    });
   });
 
   it("can't be saved while the answer is still streaming", () => {

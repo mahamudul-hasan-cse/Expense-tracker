@@ -33,6 +33,10 @@ interface ExpenseFormDialogProps {
   categories: Category[];
   expense?: Expense | null;
   preselectedCategory?: Category | null;
+  /** Prefill a new expense (e.g. from an assistant quick-add proposal) */
+  initial?: ExpenseCreate | null;
+  /** Save a new expense some other way than POST /expenses (assistant confirm) */
+  onSave?: (data: ExpenseCreate) => Promise<unknown>;
 }
 
 export function ExpenseFormDialog({
@@ -41,6 +45,8 @@ export function ExpenseFormDialog({
   categories,
   expense,
   preselectedCategory,
+  initial,
+  onSave,
 }: ExpenseFormDialogProps) {
   const { toast } = useToast();
   const createExpense = useCreateExpense();
@@ -106,6 +112,11 @@ export function ExpenseFormDialog({
       setCategoryId(expense.category.id);
       setNote(expense.note || "");
       setExpenseDate(expense.expense_date);
+    } else if (initial) {
+      setAmount(initial.amount.toString());
+      setCategoryId(initial.category_id);
+      setNote(initial.note || "");
+      setExpenseDate(initial.expense_date || todayISO());
     } else if (preselectedCategory) {
       setAmount("");
       setCategoryId(preselectedCategory.id);
@@ -117,7 +128,7 @@ export function ExpenseFormDialog({
       setNote("");
       setExpenseDate(todayISO());
     }
-  }, [expense, preselectedCategory, open]);
+  }, [expense, preselectedCategory, initial, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,7 +162,8 @@ export function ExpenseFormDialog({
           note: note || undefined,
           expense_date: expenseDate || undefined,
         };
-        await createExpense.mutateAsync(createData);
+        if (onSave) await onSave(createData);
+        else await createExpense.mutateAsync(createData);
         toast({
           title: "Success",
           description: "Expense added successfully",

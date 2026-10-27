@@ -1,14 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Clock, Loader2, X } from "lucide-react";
+import { Check, Clock, Loader2, Pencil, X } from "lucide-react";
+import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
-import { invalidateExpenseData } from "@/lib/queries";
+import { invalidateExpenseData, useCategories } from "@/lib/queries";
 import { cn, formatCurrency, formatDateFull } from "@/lib/utils";
-import { AssistantMessage, ExpenseProposal, ProposalStatus } from "@/types";
+import { AssistantMessage, ExpenseCreate, ExpenseProposal, ProposalStatus } from "@/types";
 
 interface ProposalCardProps {
   proposal: ExpenseProposal;
@@ -32,6 +33,26 @@ export function ProposalCard({ proposal, status, messageId, onChange }: Proposal
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState<"confirm" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const categories = useCategories();
+  // Stable object: the form resets its fields whenever `initial` changes
+  const initial = useMemo<ExpenseCreate>(
+    () => ({
+      amount: proposal.amount,
+      category_id: proposal.category_id,
+      note: proposal.note ?? undefined,
+      expense_date: proposal.expense_date,
+    }),
+    [proposal]
+  );
+
+  // Edit → the regular expense form, saved through the same idempotent confirm
+  const saveEdited = async (data: ExpenseCreate) => {
+    if (!messageId) return;
+    const updated = await api.confirmProposal(messageId, data);
+    invalidateExpenseData(queryClient);
+    onChange(updated);
+  };
 
   // A ref, not just state: a second click can arrive before React re-renders
   const inFlight = useRef(false);
@@ -113,6 +134,22 @@ export function ProposalCard({ proposal, status, messageId, onChange }: Proposal
             <X className="mr-1.5 h-4 w-4" />
             Don&apos;t save
           </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setEditing(true)}
+            disabled={!messageId || busy !== null}
+          >
+            <Pencil className="mr-1.5 h-4 w-4" />
+            Edit
+          </Button>
+          <ExpenseFormDialog
+            open={editing}
+            onClose={() => setEditing(false)}
+            categories={categories.data?.categories ?? []}
+            initial={initial}
+            onSave={saveEdited}
+          />
         </div>
       ) : (
         <p

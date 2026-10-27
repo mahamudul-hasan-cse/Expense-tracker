@@ -388,6 +388,18 @@ export function useSetAssistantEnabled() {
   });
 }
 
+/** Written by the server at most once a day; no retries (each try can cost money). */
+export function useWeeklyInsight(enabled: boolean) {
+  return useQuery({
+    queryKey: ["weeklyInsight"],
+    queryFn: () => api.getWeeklyInsight(),
+    enabled,
+    retry: false,
+    staleTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
 export function useConversations(enabled = true) {
   return useQuery({
     queryKey: ["conversations"],
@@ -401,7 +413,11 @@ export function useDeleteConversation() {
   return useMutation({
     mutationFn: (id: string | null) =>
       id ? api.deleteConversation(id) : api.deleteAllConversations(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["conversations"] }),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      // Deleting all history also clears the saved weekly insight
+      if (id === null) queryClient.removeQueries({ queryKey: ["weeklyInsight"] });
+    },
   });
 }
 

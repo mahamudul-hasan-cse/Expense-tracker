@@ -332,6 +332,12 @@ export interface AssistantMessage {
   created_at: string;
 }
 
+export interface WeeklyInsight {
+  content: string;
+  generated_for: string;
+  cached: boolean;
+}
+
 export interface ConversationSummary {
   id: string;
   title: string;

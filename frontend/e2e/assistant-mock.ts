@@ -33,6 +33,12 @@ export const REPLIES = {
 - **Transport (🚕):** বাজেট ৳2,500, খরচ ৳3,205 (128%)। 🔴
 - **Groceries (🛒):** বাজেট ৳9,000, খরচ ৳8,175 (91%)। বাকি আছে ৳825। 🟠
 - **Food (🍛):** বাজেট ৳7,000, খরচ ৳4,845 (69%)। 🟢`,
+  insight: `**You spent ৳6,850 this week, ৳1,240 less than last week.**
+- Food: ৳2,150, the biggest share (31%)
+- Rickshaw and Transport together: ৳1,380, down 18%
+- Random: ৳1,900, mostly one ৳1,200 gift
+
+Try a ৳400 weekly cap on Random snacks to keep the month on budget.`,
   quickAdd:
     "দুপুরের খাবারের জন্য ৳250 (Food, আজ) প্রস্তুত করেছি, এখনো সেভ হয়নি। কার্ডটি দেখে **Save expense** চাপুন।",
 };
@@ -146,6 +152,13 @@ export async function mockAssistant(page: Page, initial: Partial<MockState> = {}
     state.enabled = route.request().postDataJSON().enabled;
     return json(route, status(state));
   });
+  await page.route(`${API}/insights/weekly`, (route) =>
+    json(route, {
+      content: REPLIES.insight,
+      generated_for: new Date().toISOString().slice(0, 10),
+      cached: true,
+    })
+  );
   await page.route(`${API}/conversations`, (route) =>
     json(route, {
       conversations: state.conversations,

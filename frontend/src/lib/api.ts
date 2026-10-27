@@ -36,6 +36,7 @@ import {
   IncomeUpdate,
   MarkPaidResponse,
   User,
+  WeeklyInsight,
 } from "@/types";
 import {
   API_BASE,
@@ -325,6 +326,7 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ enabled }),
     }),
+  getWeeklyInsight: () => request<WeeklyInsight>("/assistant/insights/weekly"),
   getConversations: () => request<ConversationListResponse>("/assistant/conversations"),
   getConversation: (id: string) => request<ConversationDetail>(`/assistant/conversations/${id}`),
   deleteConversation: (id: string) =>

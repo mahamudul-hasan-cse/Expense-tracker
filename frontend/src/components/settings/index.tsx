@@ -46,6 +46,7 @@ import {
   useUpdateRecurring,
   useDeleteRecurring,
 } from "@/lib/queries";
+import { AssistantSettings } from "./assistant-settings";
 import { BudgetSettings } from "./budget-settings";
 import { IncomeCategories } from "./income-categories";
 
@@ -462,6 +463,8 @@ export function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      <AssistantSettings />
 
       {/* Add Category Dialog */}
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>

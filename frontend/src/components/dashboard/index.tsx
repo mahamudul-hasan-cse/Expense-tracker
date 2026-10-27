@@ -37,6 +37,7 @@ import { dailyAverage, splitUpcoming } from "@/lib/stats";
 import { BudgetOverview } from "./budget-overview";
 import { CashflowRow } from "./cashflow-row";
 import { GoalsCard } from "./goals-card";
+import { InsightCard } from "@/components/assistant/insight-card";
 
 const CHART_COLORS = [
   "hsl(262, 83%, 58%)",
@@ -212,6 +213,9 @@ export function Dashboard() {
 
       {/* Income / Spent / Saved this month */}
       <CashflowRow />
+
+      {/* AI weekly insight (only when the assistant is on) */}
+      <InsightCard />
 
       {/* Charts Row */}
       <div className="grid gap-6 lg:grid-cols-2">

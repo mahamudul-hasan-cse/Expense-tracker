@@ -418,6 +418,9 @@ def test_confirm_with_edits_uses_manual_entry_validation(client, enabled, use_ll
     assert saved.status_code == 200
     expense = client.get(f"{API}/expenses", headers=enabled).json()["expenses"][0]
     assert (expense["amount"], expense["note"]) == (95, "office, with tip")
+    # The stored card now shows what was saved, not the original suggestion
+    card = saved.json()["proposal"]
+    assert (card["amount"], card["note"], card["category_name"]) == (95, "office, with tip", "Rickshaw")
 
 
 def test_cancel_then_confirm_is_refused(client, enabled, use_llm):
@@ -500,6 +503,83 @@ def test_delete_one_and_clear_all(client, enabled, use_llm):
     # Usage rows (no content) are kept for cost accounting
     with SessionLocal() as db:
         assert db.query(AssistantUsage).count() == 2
+
+
+# --- Weekly insight -----------------------------------------------------------------------------
+
+
+def insight(client, headers):
+    return client.get(f"{API}/assistant/insights/weekly", headers=headers)
+
+
+def test_weekly_insight_is_generated_once_per_day(client, enabled, use_llm):
+    fake = use_llm(
+        FakeLLM(
+            [
+                [TextDelta("Let me check."), *tool_round(("compare_periods", _week_periods()))],
+                [TextDelta("**Spending is down ৳১২০ this week.**\n- Food: ৳300")],
+            ]
+        )
+    )
+    first = insight(client, enabled)
+    assert first.status_code == 200, first.text
+    body = first.json()
+    # Only the final answer is kept, with English digits
+    assert body["content"] == "**Spending is down ৳120 this week.**\n- Food: ৳300"
+    assert body["cached"] is False
+    # Read-only: quick add is not offered to the insight
+    assert "propose_expense" not in [t["function"]["name"] for t in fake.calls[0]["tools"]]
+
+    again = insight(client, enabled)
+    assert again.json() == {**body, "cached": True}
+    assert len(fake.calls) == 2  # no new LLM request
+
+    # Counted in usage as "insight", not against the user's daily messages
+    with SessionLocal() as db:
+        assert {r.kind for r in db.query(AssistantUsage).all()} == {"insight"}
+    assert client.get(f"{API}/assistant/status", headers=enabled).json()["messages_today"] == 0
+
+
+def _week_periods():
+    return {
+        "period_a": {"start_date": "2026-01-01", "end_date": "2026-01-07"},
+        "period_b": {"start_date": "2026-01-08", "end_date": "2026-01-14"},
+    }
+
+
+def test_weekly_insight_is_limited_to_four_lookups(client, enabled, use_llm):
+    rounds = [tool_round(("list_categories", {}))] * 5 + [[TextDelta("Short insight.")]]
+    fake = use_llm(FakeLLM(rounds))
+    assert insight(client, enabled).json()["content"] == "Short insight."
+    # Tools are switched off after 4 lookups (the fake keeps asking; the server refuses)
+    assert [c["allow_tools"] for c in fake.calls] == [True] * 4 + [False, False]
+
+
+def test_weekly_insight_needs_opt_in_and_respects_the_global_budget(client, auth_headers, use_llm, monkeypatch):
+    fake = use_llm(FakeLLM([[TextDelta("x")]]))
+    off = insight(client, auth_headers)
+    assert off.status_code == 403 and off.json()["error"]["details"][0]["message"] == "disabled"
+
+    client.put(f"{API}/assistant/settings", json={"enabled": True}, headers=auth_headers)
+    monkeypatch.setattr(get_settings(), "assistant_global_daily_budget_usd", 0.0)
+    over = insight(client, auth_headers)
+    assert over.status_code == 503 and over.json()["error"]["details"][0]["message"] == "daily_budget_reached"
+    assert fake.calls == []
+
+
+def test_weekly_insight_provider_error_is_not_cached(client, enabled, use_llm):
+    use_llm(FakeLLM([[LLMRateLimited("busy")], [TextDelta("Fine now.")]]))
+    failed = insight(client, enabled)
+    assert failed.status_code == 503 and failed.json()["error"]["details"][0]["message"] == "rate_limited"
+    assert insight(client, enabled).json()["content"] == "Fine now."
+
+
+def test_deleting_all_history_also_clears_insights(client, enabled, use_llm):
+    use_llm(FakeLLM([[TextDelta("First.")], [TextDelta("Second.")]]))
+    assert insight(client, enabled).json()["content"] == "First."
+    client.delete(f"{API}/assistant/conversations", headers=enabled)
+    regenerated = insight(client, enabled).json()
+    assert (regenerated["content"], regenerated["cached"]) == ("Second.", False)
 
 
 def test_endpoints_require_auth(client):

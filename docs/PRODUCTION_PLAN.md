@@ -375,12 +375,13 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
 - [x] Tests: Vitest (SSE parser across chunk boundaries, Markdown incl. HTML-injection, proposal card) and Playwright `e2e/assistant.spec.ts` with the assistant API faked in the browser (opt-in → chip → formatted answer, quick add double click → 1 confirm, daily limit, stop → retry, 375px no overflow + history panel). No model is called.
 - [x] Screenshots `docs/screenshots/*-assistant-*` (desktop + 375px, light + dark) from the same fake with real demo-data answers
 - [x] SSE through the Next.js rewrite measured in A1 (dev + production build): not buffered
-- [ ] Later (A3): "Edit" on the card (opens the expense form prefilled; the confirm endpoint already accepts edits)
+- [x] "Edit" on the card: done in A3
 
 ## Phase A3 — Quick add, weekly insight, settings
-- [ ] `propose_expense` → confirmation card → existing `POST /expenses`; Edit opens the expense form; proposal status saved
-- [ ] Weekly insight card (once per Asia/Dhaka day per user, cached)
-- [ ] Settings: opt-in toggle, data-sharing notice, delete chat history
+- [x] `propose_expense` → confirmation card → server confirm (idempotent, same validation as `POST /expenses`); **Edit** opens the regular expense form prefilled and saves the edits through the same confirm; the card then shows what was actually saved (the server stores the final values on the message); status saved
+- [x] Weekly insight card on the dashboard: `GET /assistant/insights/weekly`, at most once per Asia/Dhaka day per user, cached in `assistant_insights`; read-only tools (no quick add), at most 4 lookups; counts toward the global budget, not the user's 20 messages; provider errors aren't cached; the client never retries automatically. Only shown when the assistant is on. **Real check (demo data): 1 lookup round, 6.4s, $0.0013.**
+- [x] Settings → "AI Assistant": on/off switch, plain-language data notice, "Delete my chat history" (with confirmation; also clears saved insights; expenses stay)
+- [x] Tests: backend (insight cached once a day, 4-lookup cap, opt-in, global budget, errors not cached, delete clears insights, edited confirm updates the card), Vitest (Edit → prefilled form → confirm with edits), Playwright (insight card, Settings switch hides it, delete history)
 
 ## Phase A4 — Evaluation and E2E
 - [ ] `scripts/eval_assistant.py` (seeded demo user, 18 EN/BN/Banglish questions, numeric checks against SQL, `--models` comparison table: accuracy, **time to first token, total time**, cost, reply language matches, no Bangla digits before the server fix-up)

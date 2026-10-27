@@ -388,3 +388,71 @@ async def run_chat(
 
     if status == "ok":
         yield "done", {"message_id": str(message_id), "model": model, "proposal": proposal}
+
+
+# --- Weekly insight -------------------------------------------------------------------------
+
+INSIGHT_REQUEST = (
+    "Write my weekly money insight: the last 7 days (today included) compared with the 7 days before. "
+    "Use the tools for every number. Format: one bold headline sentence, then 2-3 short bullets with "
+    "the real numbers, then one concrete suggestion. At most 110 words, in English, no questions back."
+)
+INSIGHT_MAX_TOOL_CALLS = 4
+INSIGHT_MAX_TOKENS = 1200
+
+
+def _load_categories(user_id: UUID) -> list[str]:
+    with SessionLocal() as db:
+        return expense_category_names(db, user_id)
+
+
+async def generate_weekly_insight(llm: ChatModel, settings: Settings, user_id: UUID) -> str:
+    """One short, data-based summary of the week. Read-only tools (no quick add), at most 4 lookups.
+
+    Raises LLMError on provider failures; records usage as kind "insight" (counts toward
+    the global daily budget, not the user's message cap).
+    """
+    categories = await run_in_threadpool(_load_categories, user_id)
+    messages = build_messages([], INSIGHT_REQUEST, categories)
+    tools = [t for t in tool_definitions() if t["function"]["name"] != "propose_expense"]
+    today = app_today()
+    text_parts: list[str] = []
+    tool_calls = 0
+    for _ in range(INSIGHT_MAX_TOOL_CALLS + 2):
+        allow_tools = tool_calls < INSIGHT_MAX_TOOL_CALLS
+        calls = []
+        round_text: list[str] = []
+        async for event in llm.stream_chat(messages, tools, max_tokens=INSIGHT_MAX_TOKENS, allow_tools=allow_tools):
+            if isinstance(event, TextDelta):
+                round_text.append(english_digits(event.text))
+            elif isinstance(event, ToolCallsReady):
+                calls = event.calls
+            elif isinstance(event, Finished):
+                await run_in_threadpool(record_usage, user_id, None, "insight", event.usage, "ok", [])
+        if not calls:
+            text_parts = round_text  # only the final answer, not "let me check" text
+            break
+        messages.append(
+            {
+                "role": "assistant",
+                "content": "".join(round_text) or None,
+                "tool_calls": [
+                    {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments or "{}"}}
+                    for c in calls
+                ],
+            }
+        )
+        for call in calls:
+            if tool_calls >= INSIGHT_MAX_TOOL_CALLS or call.name == "propose_expense":
+                result: dict[str, Any] = {"error": "no more lookups; write the insight with what you have"}
+            else:
+                tool_calls += 1
+                result = (await run_in_threadpool(_run_tool_isolated, user_id, today, call.name, call.arguments)).result
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": json.dumps(result, default=str, ensure_ascii=False),
+                }
+            )
+    return "".join(text_parts).strip()
