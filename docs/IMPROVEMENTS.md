@@ -33,6 +33,7 @@ Priority: **P1** = broken or misleading, **P2** = clearly visible polish problem
 | 16 | Goal dialog | The Icon field's placeholder (💻) looks like an entered value. | `mobile-goal-validation-error` |
 | 17 | Recurring income "Other" category | Its default icon ➕ looks like an "add" button in the Upcoming list ("Weekend tuition"). Pick a neutral icon (e.g. 💰). | `desktop-dashboard` |
 | 18 | Page headers | Inconsistent: Dashboard/Income/Goals have a subtitle, Expenses/Settings don't. Primary buttons sit on the right on desktop but wrap below the title on mobile for Income/Goals, while Expenses keeps it on the right. | various |
+| 23 | Assistant input (mobile) | At 375px the placeholder "Ask about your money, or type an expense…" wraps onto two lines inside the one-line box, so the second line is half cut off. Use a shorter placeholder on phones (e.g. "Ask or add an expense…") or let the box grow to fit. | `mobile-assistant-*` |
 
 ## P3: nice to have
 

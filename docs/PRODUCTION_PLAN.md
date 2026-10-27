@@ -17,7 +17,8 @@ Status legend: `[x]` done and verified · `[~]` done but not fully verified (see
 3. **Hosting** for backend + database (Phase 8).
 4. **License** (Phase 9) — suggested MIT.
 5. ~~Next.js 15.5 upgrade~~: done (Phase N15). **Frontend host: Vercel** (decided 2026-10-27, see below).
-8. **Replacing the old `main` at deploy time**: recommendation in Phase 8 ("Switching main to production-ready"). **Needs your OK before anything touches `main`.**
+8. ~~Replacing the old `main`~~: **approved 2026-10-27**: option A (`-s ours` merge + PR `production-ready → main`), **on deploy day only, after the backend is live**.
+9. **Rulesets (owner, 2026-10-27):** "protect-main" on `main` = require PR (0 approvals) + the 3 CI checks + block force pushes + restrict deletions. "protect-production-ready" = block force pushes + restrict deletions only (direct pushes allowed). Secret scanning and push protection on.
 
 ## GitHub and hosting facts (2026-10-27)
 
@@ -390,7 +391,7 @@ Partially present: skeletons, toasts, delete confirmations, dark mode.
 - [ ] Migrations on start (entrypoint)
 - [ ] Host-specific config + `docs/DEPLOYMENT.md` (after your choice of backend/database host)
 
-### Switching `main` to production-ready (at deploy time, with your OK)
+### Switching `main` to production-ready (approved: option A, on deploy day after the backend is live)
 `main` (1 old commit) and `production-ready` have **unrelated histories**. GitHub can't open a PR between them ("entirely different commit histories").
 
 | Option | How | Verdict |
