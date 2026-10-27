@@ -4,6 +4,8 @@ from datetime import date, timedelta
 
 import pytest
 
+from app.timeutil import today as app_today
+
 API = "/api/v1"
 
 
@@ -95,7 +97,7 @@ def test_income_amount_uses_expense_money_rules(client, auth_headers, amount, st
 
 def test_income_date_rules(client, auth_headers):
     cid = income_categories(client, auth_headers)["Salary"]["id"]
-    tomorrow = date.today() + timedelta(days=1)
+    tomorrow = app_today() + timedelta(days=1)
     assert (
         client.post(
             f"{API}/incomes",
@@ -104,7 +106,7 @@ def test_income_date_rules(client, auth_headers):
         ).status_code
         == 422
     )
-    assert add_income(client, auth_headers, 1, cid)["income_date"] == str(date.today())
+    assert add_income(client, auth_headers, 1, cid)["income_date"] == str(app_today())
 
 
 def test_income_crud_and_listing(client, auth_headers):

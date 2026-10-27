@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import pytest
 
 from app.routers.recurring import next_unpaid_due
+from app.timeutil import today as app_today
 
 API = "/api/v1"
 
@@ -111,7 +112,7 @@ def test_recurring_income_create_and_kind_rules(client, auth_headers, cats):
 
 def test_mark_paid_expense_creates_expense_and_advances_due(client, auth_headers, cats):
     _, exp = cats
-    today = date.today()
+    today = app_today()
     bill = client.post(
         f"{API}/recurring",
         json={
@@ -145,7 +146,7 @@ def test_mark_paid_expense_creates_expense_and_advances_due(client, auth_headers
 
 def test_mark_received_income_counts_in_cashflow(client, auth_headers, cats):
     inc, _ = cats
-    today = date.today()
+    today = app_today()
     salary = client.post(
         f"{API}/recurring",
         json={
@@ -179,7 +180,7 @@ def test_mark_paid_rules(client, auth_headers, cats):
     ).json()
     url = f"{API}/recurring/{rec['id']}/mark-paid"
     assert (
-        client.post(url, json={"paid_on": str(date.today() + timedelta(days=1))}, headers=auth_headers).status_code
+        client.post(url, json={"paid_on": str(app_today() + timedelta(days=1))}, headers=auth_headers).status_code
         == 422
     )
     assert client.post(url, json={"amount": 0}, headers=auth_headers).status_code == 422
@@ -193,7 +194,7 @@ def test_mark_paid_rules(client, auth_headers, cats):
 
 def test_changing_schedule_resets_paid_cycle(client, auth_headers, cats):
     _, exp = cats
-    today = date.today()
+    today = app_today()
     rec = client.post(
         f"{API}/recurring",
         json={

@@ -53,8 +53,10 @@ target-version = "py311"
 extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
-# pycodestyle, pyflakes, import sorting, bugbear
-select = ["E", "F", "W", "I", "B"]
+# pycodestyle, pyflakes, import sorting, bugbear, and DTZ: no timezone-naive
+# date.today()/datetime.now(). "Today" is Asia/Dhaka (app.timeutil.today()); the
+# server's own clock gave the wrong date between 18:00 and 24:00 UTC (CI caught it).
+select = ["E", "F", "W", "I", "B", "DTZ"]
 ignore = [
     "E501",  # long lines: the formatter handles wrapping; long test/SQL lines are fine
     "B008",  # FastAPI's Depends()/Query() in argument defaults is the intended pattern

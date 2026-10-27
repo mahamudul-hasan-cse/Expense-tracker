@@ -3,9 +3,10 @@ categories, goals, contributions or recurring income."""
 
 import csv
 import io
-from datetime import date
 
 import pytest
+
+from app.timeutil import today as app_today
 
 API = "/api/v1"
 NIL = "00000000-0000-0000-0000-000000000000"
@@ -31,7 +32,7 @@ def test_new_endpoints_require_auth(client, method, path):
 
 @pytest.fixture
 def alice(client, auth_headers):
-    today = date.today()
+    today = app_today()
     cat = client.post(f"{API}/income-categories", json={"name": "Alice Tuition"}, headers=auth_headers).json()
     income = client.post(
         f"{API}/incomes",

@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import pytest
 
 from app.routers.recurring import calculate_next_due
+from app.timeutil import today as app_today
 from tests.conftest import first_category_id
 
 API = "/api/v1"
@@ -71,7 +72,7 @@ def test_create_validation(client, auth_headers, overrides):
 
 
 def test_create_and_list_with_next_due(client, auth_headers):
-    today = date.today()
+    today = app_today()
     rec = _create(client, auth_headers, due_day=today.day).json()
     assert rec["is_active"] is True
     assert rec["next_due"] == str(today)
@@ -101,7 +102,7 @@ def test_update_rules(client, auth_headers):
 
 
 def test_upcoming_window_and_paused_items(client, auth_headers):
-    today = date.today()
+    today = app_today()
     due_today = _create(client, auth_headers, name="Today", due_day=today.isoweekday(), frequency="weekly").json()
     in_three = _create(
         client, auth_headers, name="Soon", frequency="weekly", due_day=(today + timedelta(days=3)).isoweekday()

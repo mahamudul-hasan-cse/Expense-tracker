@@ -4,6 +4,8 @@ from datetime import date
 
 import pytest
 
+from app.timeutil import today as app_today
+
 API = "/api/v1"
 
 
@@ -111,7 +113,7 @@ def test_budget_rules(client, auth_headers, cats):
 
 
 def test_budget_defaults_to_current_month(client, auth_headers, cats):
-    today = date.today()
+    today = app_today()
     client.post(
         f"{API}/budgets",
         json={"category_id": cats["Random"], "amount": 10, "month": today.month, "year": today.year},
