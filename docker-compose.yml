@@ -1,4 +1,13 @@
-version: '3.8'
+# Two ways to use this file:
+#
+#   docker compose up -d                     Just the database, for local development
+#                                            (run the backend/frontend with uv/npm as usual)
+#
+#   docker compose --profile full up --build Everything in containers: database, API (runs
+#                                            its migrations on start) and web app, then
+#                                            open http://localhost:3000
+#
+# These credentials are local-only defaults. Never use them for a real database.
 services:
   postgres:
     image: postgres:16-alpine
@@ -11,6 +20,41 @@ services:
       - "5432:5432"
     volumes:
       - wallet_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wallet_user -d wallet_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    profiles: [full]
+    environment:
+      # Development mode: plain-http cookies work on localhost
+      APP_ENV: development
+      DATABASE_URL: postgresql://wallet_user:wallet_pass@postgres:5432/wallet_agent
+      SECRET_KEY: local-compose-secret-key-change-me-0123456789abcdef
+      ALLOWED_ORIGINS: http://localhost:3000
+      COOKIE_SECURE: "false"
+      # Optional: set in your shell to try the assistant (never commit a key)
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:8000
+    profiles: [full]
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
   wallet_data:

@@ -1,21 +1,18 @@
 from limits import parse_many
 from slowapi import Limiter
 from slowapi.middleware import _ASGIMiddlewareResponder
-from slowapi.util import get_remote_address
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.client_ip import client_ip
 from app.config import get_settings
 
 _settings = get_settings()
 
-# Keyed by client IP (request.client). Behind a proxy that is only the real
-# client when uvicorn runs with --proxy-headers and FORWARDED_ALLOW_IPS lists the
-# proxy, and something in front appends the client IP to X-Forwarded-For (a
-# self-hosted `next start` passes the header through but doesn't add to it).
-# See docs/PRODUCTION_PLAN.md, "Client IPs behind the proxy".
+# Keyed by client IP: X-Client-IP from the frontend proxy when it proves itself with
+# PROXY_SHARED_SECRET, otherwise the direct peer (see app/client_ip.py).
 limiter = Limiter(
-    key_func=get_remote_address,
+    key_func=client_ip,
     default_limits=[_settings.rate_limit_default],
     storage_uri=_settings.rate_limit_storage_uri,
     enabled=_settings.rate_limit_enabled,

@@ -4,6 +4,7 @@ import uuid
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.client_ip import client_ip_from_scope
 from app.logging_config import request_id_var
 from app.monitoring import tag_request
 
@@ -40,7 +41,6 @@ class RequestLogMiddleware:
         try:
             await self.app(scope, receive, send_with_id)
         finally:
-            client = scope.get("client")
             level = logging.ERROR if status_code >= 500 else logging.INFO
             logger.log(
                 level,
@@ -53,6 +53,6 @@ class RequestLogMiddleware:
                     "path": scope["path"],
                     "status": status_code,
                     "duration_ms": round((time.perf_counter() - start) * 1000, 1),
-                    "client_ip": client[0] if client else None,
+                    "client_ip": client_ip_from_scope(scope),
                 },
             )

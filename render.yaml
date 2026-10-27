@@ -1,0 +1,33 @@
+# Render Blueprint for the backend (API). See docs/DEPLOYMENT.md for the click-by-click guide.
+# The database is on Neon (free, doesn't expire); the frontend is on Vercel.
+services:
+  - type: web
+    name: wallet-agent-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: singapore
+    # free: sleeps after 15 idle minutes (about 1 minute to wake). starter ($7/month): always on.
+    plan: free
+    branch: main
+    # Deploy only after GitHub CI passes for the commit
+    autoDeployTrigger: checksPass
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL # Neon *direct* connection string (not "-pooler"), see docs/DEPLOYMENT.md
+        sync: false
+      - key: SECRET_KEY # signs login tokens
+        generateValue: true
+      - key: ALLOWED_ORIGINS # your Vercel URL, e.g. https://expense-tracker-orcin-pi.vercel.app
+        sync: false
+      - key: PROXY_SHARED_SECRET # same value in Vercel (lets rate limits see real client IPs)
+        sync: false
+      - key: OPENROUTER_API_KEY # optional: the AI assistant is off without it
+        sync: false
+      - key: SENTRY_DSN # optional: error monitoring
+        sync: false
+      - key: APP_TIMEZONE
+        value: Asia/Dhaka

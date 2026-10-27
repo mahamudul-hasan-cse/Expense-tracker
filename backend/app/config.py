@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     assistant_history_messages: int = 6
     assistant_timeout_seconds: float = 60.0
 
+    # Shared with the frontend proxy (Vercel). Requests carrying it may state the real
+    # client IP in X-Client-IP, used for per-IP rate limits and logs. Empty = ignore
+    # X-Client-IP and use the direct peer address. See app/client_ip.py.
+    proxy_shared_secret: SecretStr = SecretStr("")
+
     # Error monitoring (Sentry). Off unless SENTRY_DSN is set.
     sentry_dsn: SecretStr = SecretStr("")
     sentry_environment: str = ""  # defaults to APP_ENV
@@ -122,6 +127,8 @@ class Settings(BaseSettings):
             problems.append("ALLOWED_ORIGINS cannot contain '*'; list the frontend origin(s)")
         if not self.origins:
             problems.append("ALLOWED_ORIGINS must list the frontend origin(s)")
+        if 0 < len(self.proxy_shared_secret.get_secret_value()) < 32:
+            problems.append("PROXY_SHARED_SECRET must be at least 32 characters")
         if problems:
             raise ValueError("Invalid production configuration:\n  - " + "\n  - ".join(problems))
         return self

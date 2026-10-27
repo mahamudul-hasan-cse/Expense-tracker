@@ -390,26 +390,30 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
 - [x] Playwright: chips → message (mocked) → quick-add confirm (mocked; the real confirm creating the expense is covered by backend tests, incl. 5 concurrent confirms → 1 expense)
 - [x] **Owner decisions (2026-10-27):** per-user limit 50/day; cheaper messages (−41% per message at 18/18: concise answers, compact tool JSON, per-user sticky routing for cache hits 71% → 87%, 6-message history, max output 1,500); Haiku 5.5 vs Qwen 3.8 27B → **Haiku stays** (`ASSISTANT_MODEL` set). Details in `docs/ASSISTANT_EVAL.md`.
 
-## Phase 6 — UX polish
-Partially present: skeletons, toasts, delete confirmations, dark mode.
-- [ ] Error states with retry; empty states with CTA
-- [ ] One `Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT' })` helper everywhere
-- [ ] Mobile nav at 375px (current navbar overflows)
-- [ ] Accessibility pass (labels, focus, aria, contrast)
-- [ ] Inline validation matching backend rules; keep input on failure (submit already disabled while saving in the expense form only)
-- [ ] PWA manifest + original icons + theme color
-- [ ] Per-page titles/meta, favicon, custom 404
+## Phase 6 — UX polish (done 2026-10-28)
+*Verified: unit tests, layout e2e (no page wider than 375px), accessibility e2e (axe-core, WCAG 2.1 A/AA, every page, light + dark, desktop + 375px), screenshots re-captured and reviewed. Details per item in `docs/IMPROVEMENTS.md`.*
+- [x] Every IMPROVEMENTS.md item (P2 #7–18, #23; P3 #19–22)
+- [x] Error states with retry on every data page + an error page for crashes; empty states with a call to action
+- [x] One `Intl.NumberFormat` money helper (`formatCurrency`, plus compact axis labels)
+- [x] Mobile nav at 375px: bottom tab bar with labels
+- [x] Accessibility pass, automated in `e2e/a11y.spec.ts`; fixed contrast (purple/red/green/amber, light and dark), unlabelled inputs, tabs without panels, focusable hidden chart parts; skip link; chart text summaries
+- [x] Inline validation with the backend's exact rules in every form; input kept on failure
+- [x] PWA manifest + original icons + theme colour
+- [x] Per-page titles/meta, SVG favicon, custom 404; landing page made accurate (it claimed "no signup", "join thousands", `$` prices, dead links)
 
-## Phase 7 — Monitoring
-- [ ] Sentry backend + frontend, enabled only when `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` is set
-- [ ] README section on UptimeRobot against `/health`
+## Phase 7 — Monitoring (done 2026-10-28)
+*Verified: backend tests for the privacy scrubbing and for "off without a DSN"; frontend unit tests for the same. **Not verified: a real Sentry project receiving an event** (needs your DSN).*
+- [x] Sentry backend (`app/monitoring.py`) + frontend (`lib/sentry.ts`, `instrumentation*.ts`, error pages), only when `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` is set; the browser SDK isn't even downloaded without a DSN. Never sends bodies, cookies, auth headers, query strings, IPs or assistant content; events carry the request id.
+- [x] `docs/MONITORING.md`: UptimeRobot keyword monitor on `/health`, Sentry setup, logs
 
-## Phase 8 — Docker and deployment (ASK FIRST about the backend/database host)
-**Frontend host: Vercel** (decided). Backend and database host: still to choose.
-- [ ] Backend multi-stage Dockerfile (uv, non-root). The frontend doesn't need one on Vercel; an optional one for self-hosting (`output: 'standalone'`).
-- [ ] docker-compose: Postgres + backend + frontend with healthchecks (local "everything" run)
-- [ ] Migrations on start (entrypoint)
-- [ ] Host-specific config + `docs/DEPLOYMENT.md` (after your choice of backend/database host)
+## Phase 8 — Docker and deployment prep (done 2026-10-28, not deployed)
+**Recommended hosts:** API on **Render** (Docker, Singapore, free → Starter $7/month), database on **Neon** (Singapore, free 1 GB, doesn't expire), website on **Vercel**. Comparison and click-by-click guide in `docs/DEPLOYMENT.md`.
+- [x] Backend multi-stage Dockerfile (uv, Python 3.13, non-root, healthcheck); frontend standalone Dockerfile (non-root) for self-hosting/compose
+- [x] docker-compose: `docker compose up -d` = database only (unchanged); `--profile full` = database + API + web with healthchecks
+- [x] Migrations on start: `python -m app.migrate` under a Postgres advisory lock (safe with several instances), tested
+- [x] Client IPs behind Vercel: Next middleware adds `X-Client-IP` + `X-Proxy-Secret`; the backend trusts the IP only with the right secret (constant-time compare), else the peer address; production requires a 32+ character secret. Tested both sides, incl. spoofing attempts.
+- [x] `render.yaml` Blueprint (Singapore, health check, deploy only after CI passes) + `docs/DEPLOYMENT.md`
+- [x] CI job "Docker": builds both images, starts the full stack, checks `/health`, registers a user through the web app's `/api` proxy, and checks both containers run as non-root (Docker isn't running on the dev machine, so CI is where this is verified)
 
 ### Switching `main` to production-ready (approved: option A, on deploy day after the backend is live)
 `main` (1 old commit) and `production-ready` have **unrelated histories**. GitHub can't open a PR between them ("entirely different commit histories").
