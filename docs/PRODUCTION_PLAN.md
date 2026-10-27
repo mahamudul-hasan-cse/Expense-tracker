@@ -348,9 +348,15 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
   Most of the wait is 2–3 tool rounds, each with hidden reasoning. **Recommendation: keep the default** (`ASSISTANT_REASONING_EFFORT` unset): `low` doesn't help Haiku, `none` hurts language-matching. The UI shows tool status lines ("Checking your spending…") during the wait. New setting `ASSISTANT_REASONING_EFFORT` (none|minimal|low|medium|high) is sent as OpenRouter `reasoning: {effort, exclude: true}` only when set; re-measure per model in A4.
 
 ## Phase A2 — Assistant frontend
-- [ ] `/assistant` page + floating button; streamed markdown (raw HTML off), stop, retry, status line
-- [ ] Suggested chips (EN/BN); conversation list, continue, delete, clear all
-- [ ] Measured: SSE isn't buffered by the Next.js rewrite (dev + production build); fallback route handler only if needed
+- [x] `/assistant` page + floating button (only when the server has a key; adds bottom space so it never covers row actions)
+- [x] Streamed answers rendered by a small Markdown renderer that builds React elements only (no HTML from the model, ever); tool status line ("Checking your spending…"); Stop (aborts the stream; the server saves it as interrupted) and Retry
+- [x] Suggested chips (EN/BN/Banglish); conversation list (sidebar on desktop, panel on phones), continue, delete, delete all
+- [x] Opt-in card (off by default; what's shared, ZDR, read-only, daily limit); daily-limit / daily-budget message replaces the input; "N of 20 left today"
+- [x] Quick-add card: Save / Don't save → server confirm (idempotent; double click = one request, also guarded in the UI), states saved / not saved / expired shown clearly, English digits
+- [x] Tests: Vitest (SSE parser across chunk boundaries, Markdown incl. HTML-injection, proposal card) and Playwright `e2e/assistant.spec.ts` with the assistant API faked in the browser (opt-in → chip → formatted answer, quick add double click → 1 confirm, daily limit, stop → retry, 375px no overflow + history panel). No model is called.
+- [x] Screenshots `docs/screenshots/*-assistant-*` (desktop + 375px, light + dark) from the same fake with real demo-data answers
+- [x] SSE through the Next.js rewrite measured in A1 (dev + production build): not buffered
+- [ ] Later (A3): "Edit" on the card (opens the expense form prefilled; the confirm endpoint already accepts edits)
 
 ## Phase A3 — Quick add, weekly insight, settings
 - [ ] `propose_expense` → confirmation card → existing `POST /expenses`; Edit opens the expense form; proposal status saved

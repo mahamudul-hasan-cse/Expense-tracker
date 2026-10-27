@@ -35,7 +35,7 @@ export const queryKeys = {
 };
 
 // Everything derived from expenses: lists, stats, and budget spending
-function invalidateExpenseData(queryClient: QueryClient) {
+export function invalidateExpenseData(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["expenses"] });
   queryClient.invalidateQueries({ queryKey: ["stats"] });
   queryClient.invalidateQueries({ queryKey: ["budgets"] });
@@ -372,6 +372,36 @@ export function useDeleteGoal() {
   return useMutation({
     mutationFn: (id: string) => api.deleteGoal(id),
     onSuccess: () => invalidateGoalData(queryClient),
+  });
+}
+
+// Assistant
+export function useAssistantStatus() {
+  return useQuery({ queryKey: ["assistantStatus"], queryFn: () => api.getAssistantStatus() });
+}
+
+export function useSetAssistantEnabled() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => api.setAssistantEnabled(enabled),
+    onSuccess: (status) => queryClient.setQueryData(["assistantStatus"], status),
+  });
+}
+
+export function useConversations(enabled = true) {
+  return useQuery({
+    queryKey: ["conversations"],
+    queryFn: () => api.getConversations(),
+    enabled,
+  });
+}
+
+export function useDeleteConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string | null) =>
+      id ? api.deleteConversation(id) : api.deleteAllConversations(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["conversations"] }),
   });
 }
 

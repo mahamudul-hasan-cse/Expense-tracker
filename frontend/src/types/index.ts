@@ -294,3 +294,56 @@ export interface BudgetSummary {
   percentage: number;
   budgets: Budget[];
 }
+
+// Assistant
+export type AssistantUnavailableReason =
+  "not_configured" | "disabled" | "daily_budget_reached" | "daily_limit";
+
+export interface AssistantStatus {
+  configured: boolean;
+  enabled: boolean;
+  available: boolean;
+  reason: AssistantUnavailableReason | null;
+  message: string | null;
+  messages_today: number;
+  daily_limit: number;
+}
+
+/** A quick-add suggestion from the assistant. Nothing is saved until the user confirms. */
+export interface ExpenseProposal {
+  amount: number;
+  category_id: string;
+  category_name: string;
+  category_icon: string | null;
+  expense_date: string;
+  note: string | null;
+}
+
+export type ProposalStatus = "pending" | "confirmed" | "cancelled" | "expired";
+
+export interface AssistantMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  proposal: ExpenseProposal | null;
+  proposal_status: ProposalStatus | null;
+  expense_id: string | null;
+  status: "ok" | "interrupted" | "error";
+  created_at: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationListResponse {
+  conversations: ConversationSummary[];
+  pagination: PaginationInfo;
+}
+
+export interface ConversationDetail extends ConversationSummary {
+  messages: AssistantMessage[];
+}

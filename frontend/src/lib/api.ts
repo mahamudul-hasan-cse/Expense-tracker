@@ -1,4 +1,8 @@
 import {
+  AssistantMessage,
+  AssistantStatus,
+  ConversationDetail,
+  ConversationListResponse,
   Category,
   CategoryCreate,
   CategoryUpdate,
@@ -78,7 +82,7 @@ function send(endpoint: string, options?: RequestInit): Promise<Response> {
 }
 
 /** Fetch with auth; on 401 refresh the session once and retry, else go to login. */
-async function authedFetch(endpoint: string, options?: RequestInit): Promise<Response> {
+export async function authedFetch(endpoint: string, options?: RequestInit): Promise<Response> {
   let res = await send(endpoint, options);
   if (res.status === 401 && !endpoint.startsWith("/auth/")) {
     if (await refreshSession()) {
@@ -313,4 +317,27 @@ export const api = {
   deleteGoal: (id: string) => request<void>(`/goals/${id}`, { method: "DELETE" }),
   addContribution: (goalId: string, data: ContributionCreate) =>
     request<Goal>(`/goals/${goalId}/contributions`, { method: "POST", body: JSON.stringify(data) }),
+
+  // Assistant (chat itself streams: see lib/assistant-stream.ts)
+  getAssistantStatus: () => request<AssistantStatus>("/assistant/status"),
+  setAssistantEnabled: (enabled: boolean) =>
+    request<AssistantStatus>("/assistant/settings", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
+  getConversations: () => request<ConversationListResponse>("/assistant/conversations"),
+  getConversation: (id: string) => request<ConversationDetail>(`/assistant/conversations/${id}`),
+  deleteConversation: (id: string) =>
+    request<void>(`/assistant/conversations/${id}`, { method: "DELETE" }),
+  deleteAllConversations: () => request<void>("/assistant/conversations", { method: "DELETE" }),
+  // Idempotent on the server: retrying returns the same saved expense
+  confirmProposal: (messageId: string, edits?: ExpenseUpdate) =>
+    request<AssistantMessage>(`/assistant/messages/${messageId}/proposal/confirm`, {
+      method: "POST",
+      body: edits ? JSON.stringify(edits) : undefined,
+    }),
+  cancelProposal: (messageId: string) =>
+    request<AssistantMessage>(`/assistant/messages/${messageId}/proposal/cancel`, {
+      method: "POST",
+    }),
 };
