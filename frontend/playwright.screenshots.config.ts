@@ -12,6 +12,12 @@ export default defineConfig({
   retries: 0,
   reporter: "list",
   timeout: 180_000,
+  use: {
+    ...base.use,
+    // Full-page captures resize the viewport; with animations on, charts are caught
+    // mid-re-animation (bars bunched at the left). The app honours reduced motion.
+    reducedMotion: "reduce",
+  },
   projects: [
     {
       name: "desktop",

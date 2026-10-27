@@ -170,17 +170,18 @@ export function BudgetSettings() {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        {/* Title above the controls on phones; one row from sm up */}
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
+            <Target className="h-5 w-5" aria-hidden="true" />
             <CardTitle className="text-lg">Monthly Budgets</CardTitle>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Select
               value={selectedMonth.toString()}
               onValueChange={(v) => setSelectedMonth(parseInt(v))}
             >
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-32" aria-label="Budget month">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -195,7 +196,7 @@ export function BudgetSettings() {
               value={selectedYear.toString()}
               onValueChange={(v) => setSelectedYear(parseInt(v))}
             >
-              <SelectTrigger className="w-24">
+              <SelectTrigger className="w-24" aria-label="Budget year">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -239,12 +240,18 @@ export function BudgetSettings() {
                       >
                         {formatCurrency(budget.spent)} / {formatCurrency(budget.amount)}
                       </span>
-                      <Button variant="ghost" size="icon" onClick={() => openDialog(budget)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Edit ${budget.category.name} budget`}
+                        onClick={() => openDialog(budget)}
+                      >
                         <Edit2 className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label={`Delete ${budget.category.name} budget`}
                         onClick={() => {
                           setDeletingBudget(budget);
                           setDeleteDialogOpen(true);

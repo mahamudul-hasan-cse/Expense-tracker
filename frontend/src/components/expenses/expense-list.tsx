@@ -129,13 +129,15 @@ export function ExpenseList() {
           <CardTitle className="text-lg">Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4">
+          {/* Stacked full-width on phones, side by side from sm up */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
             {/* Search */}
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="text"
                 placeholder="Search notes..."
+                aria-label="Search notes"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -144,7 +146,7 @@ export function ExpenseList() {
                 className="pl-9"
               />
             </div>
-            <div className="w-48">
+            <div className="w-full sm:w-48">
               <Select
                 value={categoryFilter || "all"}
                 onValueChange={(v) => {
@@ -152,7 +154,7 @@ export function ExpenseList() {
                   setPage(1);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Category filter">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
@@ -168,9 +170,10 @@ export function ExpenseList() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:w-auto">
               <Input
                 type="date"
+                aria-label="From date"
                 placeholder="From"
                 value={startDate}
                 max={endDate || undefined}
@@ -178,11 +181,12 @@ export function ExpenseList() {
                   setStartDate(e.target.value);
                   setPage(1);
                 }}
-                className="w-40"
+                className="w-full min-w-0 sm:w-40"
               />
               <span className="text-muted-foreground">to</span>
               <Input
                 type="date"
+                aria-label="To date"
                 placeholder="To"
                 value={endDate}
                 min={startDate || undefined}
@@ -190,7 +194,7 @@ export function ExpenseList() {
                   setEndDate(e.target.value);
                   setPage(1);
                 }}
-                className="w-40"
+                className="w-full min-w-0 sm:w-40"
               />
             </div>
             {hasFilters && (
@@ -228,12 +232,18 @@ export function ExpenseList() {
                       {formatDate(expense.expense_date)}
                     </p>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(expense)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Edit ${expense.category.name} expense, ${formatCurrency(Number(expense.amount))}`}
+                        onClick={() => handleEdit(expense)}
+                      >
                         <Edit2 className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label={`Delete ${expense.category.name} expense, ${formatCurrency(Number(expense.amount))}`}
                         onClick={() => {
                           setDeletingExpense(expense);
                           setDeleteDialogOpen(true);

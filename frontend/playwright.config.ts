@@ -55,7 +55,7 @@ export default defineConfig({
         NEXT_DIST_DIR: ".next-e2e",
       },
       reuseExistingServer: !process.env.CI,
-      timeout: 300_000,
+      timeout: 600_000, // production build; slow machines need more than 5 min
     },
   ],
 });

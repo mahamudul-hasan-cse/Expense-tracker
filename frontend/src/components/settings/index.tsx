@@ -412,6 +412,7 @@ export function Settings() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Delete ${rec.name}`}
                       onClick={() => {
                         setDeletingRecurring(rec);
                         setDeleteRecurringDialogOpen(true);

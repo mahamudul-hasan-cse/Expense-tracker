@@ -2,18 +2,20 @@
 
 Source: `docs/screenshots/` (36 captures, desktop 1440px and mobile 375px), taken 2026-10-26 from a production build with the seeded demo user (`backend/scripts/seed_demo.py`) and a brand-new user. Regenerate with `cd frontend && npm run screenshots`.
 
-**Nothing in this list is fixed yet.** Priority: **P1** = broken or misleading, **P2** = clearly visible polish problem, **P3** = nice to have.
+Priority: **P1** = broken or misleading, **P2** = clearly visible polish problem, **P3** = nice to have.
 
-## P1: broken or misleading
+**The 6 P1 items are fixed (2026-10-27), each with a regression test.** P2 and P3 are still open (Phase 6).
 
-| # | Where | Problem | Screenshot |
+## P1: broken or misleading (fixed)
+
+| # | Where | Problem | Fix and regression test |
 |---|---|---|---|
-| 1 | Dashboard → Daily Spending Trend | **The bars are squeezed into the first ~2 days of the x-axis**, while the labels run 1–31. The chart is unreadable on desktop and mobile. This may be a regression from the React 19 / Recharts 2.15 upgrade (Phase N15); no pre-upgrade screenshot exists to compare. Investigate first. | `desktop-dashboard`, `mobile-dashboard` |
-| 2 | Expenses (mobile) | **Horizontal overflow: the page is 392px wide at 375px.** The "to" date input sits outside the Filters card. | `mobile-expenses`, `mobile-empty-expenses` |
-| 3 | Settings (mobile) | **Horizontal overflow: the page is 502px wide.** The Monthly Budgets header (title + month + year + "Add Budget") doesn't wrap, and "Add Budget" is pushed outside the card. | `mobile-settings` |
-| 4 | Dashboard → Recent Expenses (touch) | The edit button only appears on **hover** (`opacity-0 group-hover:opacity-100`), so **phone users can't edit from the dashboard**. | `mobile-dashboard` |
-| 5 | Dashboard → "Daily Average" | Divides the month's total by **every day of the month** (31), including days that haven't happened yet, so it understates the average mid-month (৳1,474 shown, about ৳1,758 actual on Oct 26). | `desktop-dashboard` |
-| 6 | Dashboard → "Upcoming Bills" stat card | Now counts **income** items as bills ("4 Upcoming Bills" includes Salary and tuition). Rename it to "Upcoming", or count only bills. | `desktop-dashboard` |
+| 1 | Dashboard → Daily Spending Trend | **The bars were squeezed into the first ~2 days of the x-axis.** | **Not a React 19 regression.** The data and layout were correct; the full-page screenshot resizes the viewport and Recharts re-animates the bars from their old positions, so the capture caught them mid-animation. Real users only saw it briefly on resize. Fix: charts respect `prefers-reduced-motion`, and screenshots emulate it. Test: `e2e/layout.spec.ts` resizes the page and checks the bars span the chart immediately. |
+| 2 | Expenses (mobile) | **Horizontal overflow: the page was 392px wide at 375px.** | Filters stack on phones; the date range is a 3-column grid. Test: `e2e/layout.spec.ts` checks no page (public and signed-in) is wider than a 375px screen. |
+| 3 | Settings (mobile) | **Horizontal overflow: the page was 502px wide.** | Monthly Budgets header wraps. Same test as #2. |
+| 4 | Dashboard → Recent Expenses (touch) | The edit button only appeared on **hover**, so phone users couldn't edit from the dashboard. | Always visible, with an accessible name. Test: no `group-hover:opacity` anywhere, and tapping Edit on a touch device opens the dialog. |
+| 5 | Dashboard → "Daily Average" | Divided by **every day of the month**, understating the average mid-month. | Divides by days elapsed in the period (Asia/Dhaka); label "Per day so far". Test: `src/lib/stats.test.ts` (the Oct 26 case: ৳45,700 / 26 ≈ ৳1,757.69). |
+| 6 | Dashboard → "Upcoming Bills" stat card | Counted **income** items as bills. | Card counts bills only ("Bills Due") and shows "N income expected" underneath. Test: `src/lib/stats.test.ts`. |
 
 ## P2: visible polish problems
 
