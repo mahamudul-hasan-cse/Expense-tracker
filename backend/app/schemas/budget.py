@@ -1,13 +1,17 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
-from decimal import Decimal
-from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+from app.schemas.pagination import PaginationInfo
+from app.schemas.types import Money, MoneyIn
 
 
 class BudgetBase(BaseModel):
     category_id: UUID
-    amount: Decimal = Field(..., gt=0)
+    amount: MoneyIn
     month: int = Field(..., ge=1, le=12)
     year: int = Field(..., ge=2020, le=2100)
 
@@ -17,7 +21,7 @@ class BudgetCreate(BudgetBase):
 
 
 class BudgetUpdate(BaseModel):
-    amount: Optional[Decimal] = Field(None, gt=0)
+    amount: Optional[MoneyIn] = None
 
 
 class CategoryInfo(BaseModel):
@@ -32,10 +36,10 @@ class CategoryInfo(BaseModel):
 class BudgetResponse(BaseModel):
     id: UUID
     category: CategoryInfo
-    amount: Decimal
+    amount: Money
     month: int
     year: int
-    spent: Decimal = Decimal("0")  # Calculated field
+    spent: Money = Decimal("0")  # Calculated field
     percentage: float = 0  # Percentage of budget used
     created_at: datetime
 
@@ -45,10 +49,11 @@ class BudgetResponse(BaseModel):
 
 class BudgetListResponse(BaseModel):
     budgets: list[BudgetResponse]
+    pagination: PaginationInfo
 
 
 class BudgetSummary(BaseModel):
-    total_budget: Decimal
-    total_spent: Decimal
+    total_budget: Money
+    total_spent: Money
     percentage: float
     budgets: list[BudgetResponse]

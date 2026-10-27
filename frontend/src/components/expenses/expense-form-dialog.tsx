@@ -18,9 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { api } from "@/lib/api";
+import { useCreateCategory, useCreateExpense, useUpdateExpense } from "@/lib/queries";
+import { todayISO } from "@/lib/utils";
 import { Category, Expense, ExpenseCreate, ExpenseUpdate } from "@/types";
 import { useToast } from "@/hooks/use-toast";
+import { Plus } from "lucide-react";
+
+// Sentinel Select value for the "+ Add new category" option
+const NEW_CATEGORY = "__new__";
 
 interface ExpenseFormDialogProps {
   open: boolean;
@@ -28,6 +33,10 @@ interface ExpenseFormDialogProps {
   categories: Category[];
   expense?: Expense | null;
   preselectedCategory?: Category | null;
+  /** Prefill a new expense (e.g. from an assistant quick-add proposal) */
+  initial?: ExpenseCreate | null;
+  /** Save a new expense some other way than POST /expenses (assistant confirm) */
+  onSave?: (data: ExpenseCreate) => Promise<unknown>;
 }
 
 export function ExpenseFormDialog({
@@ -36,15 +45,66 @@ export function ExpenseFormDialog({
   categories,
   expense,
   preselectedCategory,
+  initial,
+  onSave,
 }: ExpenseFormDialogProps) {
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
+  const createExpense = useCreateExpense();
+  const updateExpense = useUpdateExpense();
+  const loading = createExpense.isPending || updateExpense.isPending;
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [note, setNote] = useState("");
   const [expenseDate, setExpenseDate] = useState("");
 
+  // Inline "add new category"
+  const createCategory = useCreateCategory();
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState("");
+  const [createdCategory, setCreatedCategory] = useState<Category | null>(null);
+
   const isEditing = !!expense;
+
+  useEffect(() => {
+    setAddingCategory(false);
+    setNewCategoryName("");
+    setNewCategoryIcon("");
+  }, [open]);
+
+  const handleCategoryChange = (value: string) => {
+    if (value === NEW_CATEGORY) {
+      setAddingCategory(true);
+    } else {
+      setCategoryId(value);
+    }
+  };
+
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      toast({ title: "Error", description: "Category name is required", variant: "destructive" });
+      return;
+    }
+    try {
+      const category = await createCategory.mutateAsync({
+        name,
+        icon: newCategoryIcon.trim() || undefined,
+      });
+      setCreatedCategory(category);
+      setCategoryId(category.id);
+      setAddingCategory(false);
+      setNewCategoryName("");
+      setNewCategoryIcon("");
+      toast({ title: "Success", description: `Category "${category.name}" added` });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add category",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     if (expense) {
@@ -52,22 +112,27 @@ export function ExpenseFormDialog({
       setCategoryId(expense.category.id);
       setNote(expense.note || "");
       setExpenseDate(expense.expense_date);
+    } else if (initial) {
+      setAmount(initial.amount.toString());
+      setCategoryId(initial.category_id);
+      setNote(initial.note || "");
+      setExpenseDate(initial.expense_date || todayISO());
     } else if (preselectedCategory) {
       setAmount("");
       setCategoryId(preselectedCategory.id);
       setNote("");
-      setExpenseDate(new Date().toISOString().split("T")[0]);
+      setExpenseDate(todayISO());
     } else {
       setAmount("");
       setCategoryId("");
       setNote("");
-      setExpenseDate(new Date().toISOString().split("T")[0]);
+      setExpenseDate(todayISO());
     }
-  }, [expense, preselectedCategory, open]);
+  }, [expense, preselectedCategory, initial, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!amount || !categoryId) {
       toast({
         title: "Error",
@@ -78,16 +143,14 @@ export function ExpenseFormDialog({
     }
 
     try {
-      setLoading(true);
-      
       if (isEditing && expense) {
         const updateData: ExpenseUpdate = {
           amount: parseFloat(amount),
           category_id: categoryId,
-          note: note || undefined,
+          note: note.trim() || null,
           expense_date: expenseDate || undefined,
         };
-        await api.updateExpense(expense.id, updateData);
+        await updateExpense.mutateAsync({ id: expense.id, data: updateData });
         toast({
           title: "Success",
           description: "Expense updated successfully",
@@ -99,13 +162,14 @@ export function ExpenseFormDialog({
           note: note || undefined,
           expense_date: expenseDate || undefined,
         };
-        await api.createExpense(createData);
+        if (onSave) await onSave(createData);
+        else await createExpense.mutateAsync(createData);
         toast({
           title: "Success",
           description: "Expense added successfully",
         });
       }
-      
+
       onClose();
     } catch (error) {
       toast({
@@ -113,12 +177,13 @@ export function ExpenseFormDialog({
         description: error instanceof Error ? error.message : "Failed to save expense",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  const selectedCategory = categories.find((c) => c.id === categoryId);
+  // A just-created category may not be in `categories` until the refetch lands
+  const selectedCategory =
+    categories.find((c) => c.id === categoryId) ??
+    (createdCategory?.id === categoryId ? createdCategory : undefined);
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -155,8 +220,8 @@ export function ExpenseFormDialog({
           {!preselectedCategory && (
             <div className="space-y-2">
               <Label htmlFor="category">Category *</Label>
-              <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger>
+              <Select value={categoryId} onValueChange={handleCategoryChange}>
+                <SelectTrigger id="category">
                   <SelectValue placeholder="Select a category">
                     {selectedCategory && (
                       <span className="flex items-center gap-2">
@@ -175,8 +240,62 @@ export function ExpenseFormDialog({
                       </span>
                     </SelectItem>
                   ))}
+                  <SelectItem value={NEW_CATEGORY} className="border-t text-primary">
+                    <span className="flex items-center gap-2">
+                      <Plus className="h-4 w-4" />
+                      Add new category...
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
+
+              {addingCategory && (
+                <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                  <div className="flex gap-2">
+                    <Input
+                      aria-label="New category icon"
+                      placeholder="🍔"
+                      value={newCategoryIcon}
+                      onChange={(e) => setNewCategoryIcon(e.target.value)}
+                      maxLength={50}
+                      className="w-16"
+                    />
+                    <Input
+                      aria-label="New category name"
+                      placeholder="Category name"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        // Enter adds the category instead of submitting the expense
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleCreateCategory();
+                        }
+                      }}
+                      maxLength={100}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAddingCategory(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleCreateCategory}
+                      disabled={createCategory.isPending}
+                    >
+                      {createCategory.isPending ? "Adding..." : "Add"}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -198,7 +317,7 @@ export function ExpenseFormDialog({
               type="date"
               value={expenseDate}
               onChange={(e) => setExpenseDate(e.target.value)}
-              max={new Date().toISOString().split("T")[0]}
+              max={todayISO()}
             />
           </div>
 

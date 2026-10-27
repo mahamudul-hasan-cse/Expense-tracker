@@ -31,20 +31,24 @@ import {
 } from "@/components/ui/alert-dialog";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { Category, RecurringExpense } from "@/types";
+import { Category, RecurringExpense, RecurringKind } from "@/types";
 import { SettingsSkeleton } from "@/components/shared/skeletons";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit2, Trash2, Download } from "lucide-react";
 import {
   useCategories,
+  useIncomeCategories,
   useCreateCategory,
+  useUpdateCategory,
   useDeleteCategory,
   useRecurring,
   useCreateRecurring,
   useUpdateRecurring,
   useDeleteRecurring,
 } from "@/lib/queries";
+import { AssistantSettings } from "./assistant-settings";
 import { BudgetSettings } from "./budget-settings";
+import { IncomeCategories } from "./income-categories";
 
 export function Settings() {
   const { toast } = useToast();
@@ -52,7 +56,10 @@ export function Settings() {
   // React Query hooks
   const { data: categoriesData, isLoading: categoriesLoading } = useCategories();
   const { data: recurringData, isLoading: recurringLoading } = useRecurring();
+  const { data: incomeCategoriesData } = useIncomeCategories();
+  const incomeCategories = incomeCategoriesData?.income_categories ?? [];
   const createCategoryMutation = useCreateCategory();
+  const updateCategoryMutation = useUpdateCategory();
   const deleteCategoryMutation = useDeleteCategory();
   const createRecurringMutation = useCreateRecurring();
   const updateRecurringMutation = useUpdateRecurring();
@@ -64,6 +71,7 @@ export function Settings() {
 
   // Category dialog
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [categoryIcon, setCategoryIcon] = useState("");
 
@@ -72,6 +80,8 @@ export function Settings() {
   const [editingRecurring, setEditingRecurring] = useState<RecurringExpense | null>(null);
   const [recurringName, setRecurringName] = useState("");
   const [recurringAmount, setRecurringAmount] = useState("");
+  const [recurringKind, setRecurringKind] = useState<RecurringKind>("expense");
+  // Expense category id, or income category id when the kind is "income"
   const [recurringCategoryId, setRecurringCategoryId] = useState("");
   const [recurringFrequency, setRecurringFrequency] = useState<"weekly" | "monthly">("monthly");
   const [recurringDueDay, setRecurringDueDay] = useState("");
@@ -91,27 +101,57 @@ export function Settings() {
   }
 
   // Category handlers
-  const handleAddCategory = () => {
-    if (!categoryName) {
+  const openCategoryDialog = (category?: Category) => {
+    setEditingCategory(category ?? null);
+    setCategoryName(category?.name ?? "");
+    setCategoryIcon(category?.icon ?? "");
+    setCategoryDialogOpen(true);
+  };
+
+  const handleSaveCategory = () => {
+    const name = categoryName.trim();
+    if (!name) {
       toast({ title: "Error", description: "Category name is required", variant: "destructive" });
       return;
     }
-    createCategoryMutation.mutate(
-      { name: categoryName, icon: categoryIcon || undefined },
+    const onSuccess = (message: string) => {
+      toast({ title: "Success", description: message });
+      setCategoryDialogOpen(false);
+      setEditingCategory(null);
+      setCategoryName("");
+      setCategoryIcon("");
+    };
+    const onError = (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save category",
+        variant: "destructive",
+      });
+    };
+    if (editingCategory) {
+      updateCategoryMutation.mutate(
+        { id: editingCategory.id, data: { name, icon: categoryIcon.trim() || null } },
+        { onSuccess: () => onSuccess("Category updated successfully"), onError }
+      );
+    } else {
+      createCategoryMutation.mutate(
+        { name, icon: categoryIcon.trim() || undefined },
+        { onSuccess: () => onSuccess("Category added successfully"), onError }
+      );
+    }
+  };
+
+  const handleToggleRecurring = (rec: RecurringExpense) => {
+    updateRecurringMutation.mutate(
+      { id: rec.id, data: { is_active: !rec.is_active } },
       {
-        onSuccess: () => {
-          toast({ title: "Success", description: "Category added successfully" });
-          setCategoryDialogOpen(false);
-          setCategoryName("");
-          setCategoryIcon("");
-        },
-        onError: (error) => {
+        onSuccess: () =>
           toast({
-            title: "Error",
-            description: error instanceof Error ? error.message : "Failed to add category",
-            variant: "destructive",
-          });
-        },
+            title: "Success",
+            description: `${rec.name} ${rec.is_active ? "paused" : "resumed"}`,
+          }),
+        onError: (error) =>
+          toast({ title: "Error", description: error.message, variant: "destructive" }),
       }
     );
   };
@@ -140,13 +180,17 @@ export function Settings() {
       setEditingRecurring(rec);
       setRecurringName(rec.name);
       setRecurringAmount(rec.amount.toString());
-      setRecurringCategoryId(rec.category.id);
+      setRecurringKind(rec.kind);
+      setRecurringCategoryId(
+        (rec.kind === "income" ? rec.income_category : rec.category)?.id ?? ""
+      );
       setRecurringFrequency(rec.frequency);
       setRecurringDueDay(rec.due_day.toString());
     } else {
       setEditingRecurring(null);
       setRecurringName("");
       setRecurringAmount("");
+      setRecurringKind("expense");
       setRecurringCategoryId("");
       setRecurringFrequency("monthly");
       setRecurringDueDay("");
@@ -159,12 +203,26 @@ export function Settings() {
       toast({ title: "Error", description: "All fields are required", variant: "destructive" });
       return;
     }
+    const dueDay = parseInt(recurringDueDay);
+    const maxDueDay = recurringFrequency === "weekly" ? 7 : 31;
+    if (!(dueDay >= 1 && dueDay <= maxDueDay)) {
+      toast({
+        title: "Error",
+        description: `Due day must be 1-${maxDueDay}`,
+        variant: "destructive",
+      });
+      return;
+    }
+    const categoryField =
+      recurringKind === "income"
+        ? { income_category_id: recurringCategoryId }
+        : { category_id: recurringCategoryId };
     const data = {
       name: recurringName,
       amount: parseFloat(recurringAmount),
-      category_id: recurringCategoryId,
+      ...categoryField,
       frequency: recurringFrequency,
-      due_day: parseInt(recurringDueDay),
+      due_day: dueDay,
     };
     const onSuccess = (message: string) => {
       toast({ title: "Success", description: message });
@@ -183,10 +241,13 @@ export function Settings() {
         { onSuccess: () => onSuccess("Recurring expense updated successfully"), onError }
       );
     } else {
-      createRecurringMutation.mutate(data, {
-        onSuccess: () => onSuccess("Recurring expense added successfully"),
-        onError,
-      });
+      createRecurringMutation.mutate(
+        { ...data, kind: recurringKind },
+        {
+          onSuccess: () => onSuccess("Recurring expense added successfully"),
+          onError,
+        }
+      );
     }
   };
 
@@ -210,7 +271,21 @@ export function Settings() {
       toast({ title: "Error", description: "Please select date range", variant: "destructive" });
       return;
     }
-    api.exportCSV(exportStartDate, exportEndDate);
+    if (exportStartDate > exportEndDate) {
+      toast({
+        title: "Error",
+        description: "From date must be before To date",
+        variant: "destructive",
+      });
+      return;
+    }
+    api.exportCSV(exportStartDate, exportEndDate).catch((error: Error) =>
+      toast({
+        title: "Error",
+        description: error.message || "Export failed",
+        variant: "destructive",
+      })
+    );
   };
 
   if (loading) {
@@ -226,7 +301,7 @@ export function Settings() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg">Categories</CardTitle>
-          <Button size="sm" onClick={() => setCategoryDialogOpen(true)} className="gap-1">
+          <Button size="sm" onClick={() => openCategoryDialog()} className="gap-1">
             <Plus className="h-4 w-4" />
             Add Category
           </Button>
@@ -245,28 +320,42 @@ export function Settings() {
                     <span className="text-xs text-muted-foreground">(default)</span>
                   )}
                 </div>
-                {!category.is_default && (
+                <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => {
-                      setDeletingCategory(category);
-                      setDeleteCategoryDialogOpen(true);
-                    }}
+                    aria-label={`Edit ${category.name}`}
+                    onClick={() => openCategoryDialog(category)}
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Edit2 className="h-4 w-4" />
                   </Button>
-                )}
+                  {!category.is_default && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Delete ${category.name}`}
+                      onClick={() => {
+                        setDeletingCategory(category);
+                        setDeleteCategoryDialogOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
 
+      {/* Income categories */}
+      <IncomeCategories />
+
       {/* Recurring Expenses */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">Recurring Expenses</CardTitle>
+          <CardTitle className="text-lg">Recurring Bills &amp; Income</CardTitle>
           <Button size="sm" onClick={() => openRecurringDialog()} className="gap-1">
             <Plus className="h-4 w-4" />
             Add Recurring
@@ -278,24 +367,53 @@ export function Settings() {
               {recurring.map((rec) => (
                 <div
                   key={rec.id}
-                  className="flex items-center justify-between rounded-lg border p-3"
+                  className={`flex items-center justify-between rounded-lg border p-3 ${rec.is_active ? "" : "opacity-60"}`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-xl">{rec.category.icon}</span>
+                    <span className="text-xl">
+                      {(rec.kind === "income" ? rec.income_category : rec.category)?.icon}
+                    </span>
                     <div>
-                      <p className="font-medium">{rec.name}</p>
+                      <p className="font-medium">
+                        {rec.name}
+                        {rec.kind === "income" && (
+                          <span className="ml-2 rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-normal text-emerald-700 dark:text-emerald-400">
+                            Income
+                          </span>
+                        )}
+                        {!rec.is_active && (
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">
+                            (paused)
+                          </span>
+                        )}
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         {formatCurrency(Number(rec.amount))} · {rec.frequency} · Day {rec.due_day}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => openRecurringDialog(rec)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      aria-pressed={rec.is_active}
+                      disabled={updateRecurringMutation.isPending}
+                      onClick={() => handleToggleRecurring(rec)}
+                    >
+                      {rec.is_active ? "Active" : "Paused"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Edit ${rec.name}`}
+                      onClick={() => openRecurringDialog(rec)}
+                    >
                       <Edit2 className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Delete ${rec.name}`}
                       onClick={() => {
                         setDeletingRecurring(rec);
                         setDeleteRecurringDialogOpen(true);
@@ -346,11 +464,13 @@ export function Settings() {
         </CardContent>
       </Card>
 
+      <AssistantSettings />
+
       {/* Add Category Dialog */}
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Category</DialogTitle>
+            <DialogTitle>{editingCategory ? "Edit Category" : "Add Category"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -374,7 +494,12 @@ export function Settings() {
             <Button variant="outline" onClick={() => setCategoryDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddCategory}>Add Category</Button>
+            <Button
+              onClick={handleSaveCategory}
+              disabled={createCategoryMutation.isPending || updateCategoryMutation.isPending}
+            >
+              {editingCategory ? "Save" : "Add Category"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -384,7 +509,9 @@ export function Settings() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingRecurring ? "Edit Recurring Expense" : "Add Recurring Expense"}
+              {editingRecurring
+                ? `Edit Recurring ${editingRecurring.kind === "income" ? "Income" : "Expense"}`
+                : "Add Recurring Item"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -407,13 +534,32 @@ export function Settings() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Category *</Label>
+              <Label htmlFor="recurring-kind">Type *</Label>
+              <Select
+                value={recurringKind}
+                onValueChange={(v) => {
+                  setRecurringKind(v as RecurringKind);
+                  setRecurringCategoryId("");
+                }}
+                disabled={!!editingRecurring}
+              >
+                <SelectTrigger id="recurring-kind">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="expense">Expense (a bill)</SelectItem>
+                  <SelectItem value="income">Income (e.g. salary)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recurring-category">Category *</Label>
               <Select value={recurringCategoryId} onValueChange={setRecurringCategoryId}>
-                <SelectTrigger>
+                <SelectTrigger id="recurring-category">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((cat) => (
+                  {(recurringKind === "income" ? incomeCategories : categories).map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       <span className="flex items-center gap-2">
                         <span>{cat.icon}</span>
@@ -458,9 +604,7 @@ export function Settings() {
             <Button variant="outline" onClick={() => setRecurringDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveRecurring}>
-              {editingRecurring ? "Update" : "Add"}
-            </Button>
+            <Button onClick={handleSaveRecurring}>{editingRecurring ? "Update" : "Add"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

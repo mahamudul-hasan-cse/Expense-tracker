@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency } from "@/lib/utils";
-import { Budget, Category } from "@/types";
+import { Budget } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit2, Trash2, Target } from "lucide-react";
 import {
@@ -72,8 +72,18 @@ export function BudgetSettings() {
   );
 
   const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
   ];
 
   const years = Array.from({ length: 5 }, (_, i) => today.getFullYear() - 2 + i);
@@ -106,7 +116,11 @@ export function BudgetSettings() {
             setDialogOpen(false);
           },
           onError: () => {
-            toast({ title: "Error", description: "Failed to update budget", variant: "destructive" });
+            toast({
+              title: "Error",
+              description: "Failed to update budget",
+              variant: "destructive",
+            });
           },
         }
       );
@@ -156,33 +170,49 @@ export function BudgetSettings() {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        {/* Title above the controls on phones; one row from sm up */}
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
+            <Target className="h-5 w-5" aria-hidden="true" />
             <CardTitle className="text-lg">Monthly Budgets</CardTitle>
           </div>
-          <div className="flex items-center gap-2">
-            <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
-              <SelectTrigger className="w-32">
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={selectedMonth.toString()}
+              onValueChange={(v) => setSelectedMonth(parseInt(v))}
+            >
+              <SelectTrigger className="w-32" aria-label="Budget month">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {months.map((month, i) => (
-                  <SelectItem key={i} value={(i + 1).toString()}>{month}</SelectItem>
+                  <SelectItem key={i} value={(i + 1).toString()}>
+                    {month}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
-              <SelectTrigger className="w-24">
+            <Select
+              value={selectedYear.toString()}
+              onValueChange={(v) => setSelectedYear(parseInt(v))}
+            >
+              <SelectTrigger className="w-24" aria-label="Budget year">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {years.map((year) => (
-                  <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Button size="sm" onClick={() => openDialog()} className="gap-1" disabled={availableCategories.length === 0}>
+            <Button
+              size="sm"
+              onClick={() => openDialog()}
+              className="gap-1"
+              disabled={availableCategories.length === 0}
+            >
               <Plus className="h-4 w-4" />
               Add Budget
             </Button>
@@ -201,15 +231,27 @@ export function BudgetSettings() {
                       <span className="font-medium">{budget.category.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={budget.percentage > 100 ? "text-destructive font-semibold" : "text-muted-foreground"}>
+                      <span
+                        className={
+                          budget.percentage > 100
+                            ? "text-destructive font-semibold"
+                            : "text-muted-foreground"
+                        }
+                      >
                         {formatCurrency(budget.spent)} / {formatCurrency(budget.amount)}
                       </span>
-                      <Button variant="ghost" size="icon" onClick={() => openDialog(budget)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Edit ${budget.category.name} budget`}
+                        onClick={() => openDialog(budget)}
+                      >
                         <Edit2 className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label={`Delete ${budget.category.name} budget`}
                         onClick={() => {
                           setDeletingBudget(budget);
                           setDeleteDialogOpen(true);
@@ -221,7 +263,13 @@ export function BudgetSettings() {
                   </div>
                   <Progress
                     value={Math.min(budget.percentage, 100)}
-                    className={budget.percentage > 90 ? "[&>div]:bg-destructive" : budget.percentage > 75 ? "[&>div]:bg-yellow-500" : ""}
+                    className={
+                      budget.percentage > 90
+                        ? "[&>div]:bg-destructive"
+                        : budget.percentage > 75
+                          ? "[&>div]:bg-yellow-500"
+                          : ""
+                    }
                   />
                   <p className="text-xs text-muted-foreground text-right">
                     {budget.percentage.toFixed(1)}% used
@@ -246,9 +294,9 @@ export function BudgetSettings() {
           <div className="space-y-4 py-4">
             {!editingBudget && (
               <div className="space-y-2">
-                <Label>Category</Label>
+                <Label htmlFor="budget-category">Category</Label>
                 <Select value={budgetCategoryId} onValueChange={setBudgetCategoryId}>
-                  <SelectTrigger>
+                  <SelectTrigger id="budget-category">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -271,8 +319,9 @@ export function BudgetSettings() {
               </div>
             )}
             <div className="space-y-2">
-              <Label>Monthly Budget Amount</Label>
+              <Label htmlFor="budget-amount">Monthly Budget Amount</Label>
               <Input
+                id="budget-amount"
                 type="number"
                 placeholder="Enter amount"
                 value={budgetAmount}
@@ -283,8 +332,13 @@ export function BudgetSettings() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={createBudgetMutation.isPending || updateBudgetMutation.isPending}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={createBudgetMutation.isPending || updateBudgetMutation.isPending}
+            >
               {editingBudget ? "Update" : "Create"}
             </Button>
           </DialogFooter>
@@ -297,12 +351,16 @@ export function BudgetSettings() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Budget</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the budget for {deletingBudget?.category.name}? This action cannot be undone.
+              Are you sure you want to delete the budget for {deletingBudget?.category.name}? This
+              action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDeletingBudget(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

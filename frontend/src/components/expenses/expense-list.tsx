@@ -28,10 +28,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit2, Trash2, ChevronLeft, ChevronRight, X, Search } from "lucide-react";
 import { ExpenseFormDialog } from "./expense-form-dialog";
 import { useExpenses, useCategories, useDeleteExpense } from "@/lib/queries";
+import { buildExpenseQuery } from "./expense-filters";
 
 export function ExpenseList() {
   const { toast } = useToast();
-  
+
   // Filters
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [startDate, setStartDate] = useState("");
@@ -39,7 +40,7 @@ export function ExpenseList() {
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearch = useDeferredValue(searchQuery);
   const [page, setPage] = useState(1);
-  
+
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -47,14 +48,9 @@ export function ExpenseList() {
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
 
   // React Query hooks
-  const { data: expensesData, isLoading: expensesLoading } = useExpenses({
-    page,
-    limit: 20,
-    category_id: categoryFilter || undefined,
-    start_date: startDate || undefined,
-    end_date: endDate || undefined,
-    search: deferredSearch || undefined,
-  });
+  const { data: expensesData, isLoading: expensesLoading } = useExpenses(
+    buildExpenseQuery({ page, categoryFilter, startDate, endDate, search: deferredSearch })
+  );
   const { data: categoriesData, isLoading: categoriesLoading } = useCategories();
   const deleteExpenseMutation = useDeleteExpense();
 
@@ -70,7 +66,7 @@ export function ExpenseList() {
 
   const handleDelete = async () => {
     if (!deletingExpense) return;
-    
+
     deleteExpenseMutation.mutate(deletingExpense.id, {
       onSuccess: () => {
         toast({
@@ -115,7 +111,13 @@ export function ExpenseList() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Expenses</h1>
-        <Button onClick={() => setDialogOpen(true)} className="gap-2">
+        <Button
+          onClick={() => {
+            setEditingExpense(null);
+            setDialogOpen(true);
+          }}
+          className="gap-2"
+        >
           <Plus className="h-4 w-4" />
           Add Expense
         </Button>
@@ -127,13 +129,15 @@ export function ExpenseList() {
           <CardTitle className="text-lg">Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4">
+          {/* Stacked full-width on phones, side by side from sm up */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
             {/* Search */}
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="text"
                 placeholder="Search notes..."
+                aria-label="Search notes"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -142,9 +146,15 @@ export function ExpenseList() {
                 className="pl-9"
               />
             </div>
-            <div className="w-48">
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger>
+            <div className="w-full sm:w-48">
+              <Select
+                value={categoryFilter || "all"}
+                onValueChange={(v) => {
+                  setCategoryFilter(v === "all" ? "" : v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger aria-label="Category filter">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
@@ -160,21 +170,31 @@ export function ExpenseList() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:w-auto">
               <Input
                 type="date"
+                aria-label="From date"
                 placeholder="From"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-40"
+                max={endDate || undefined}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full min-w-0 sm:w-40"
               />
               <span className="text-muted-foreground">to</span>
               <Input
                 type="date"
+                aria-label="To date"
                 placeholder="To"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-40"
+                min={startDate || undefined}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full min-w-0 sm:w-40"
               />
             </div>
             {hasFilters && (
@@ -200,9 +220,7 @@ export function ExpenseList() {
                   <div className="flex items-center gap-4">
                     <span className="text-2xl">{expense.category.icon}</span>
                     <div>
-                      <p className="font-medium">
-                        {formatCurrency(Number(expense.amount))}
-                      </p>
+                      <p className="font-medium">{formatCurrency(Number(expense.amount))}</p>
                       <p className="text-sm text-muted-foreground">
                         {expense.category.name}
                         {expense.note && ` · ${expense.note}`}
@@ -217,6 +235,7 @@ export function ExpenseList() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label={`Edit ${expense.category.name} expense, ${formatCurrency(Number(expense.amount))}`}
                         onClick={() => handleEdit(expense)}
                       >
                         <Edit2 className="h-4 w-4" />
@@ -224,6 +243,7 @@ export function ExpenseList() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label={`Delete ${expense.category.name} expense, ${formatCurrency(Number(expense.amount))}`}
                         onClick={() => {
                           setDeletingExpense(expense);
                           setDeleteDialogOpen(true);
@@ -237,9 +257,7 @@ export function ExpenseList() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-12">
-              No expenses found
-            </p>
+            <p className="text-center text-muted-foreground py-12">No expenses found</p>
           )}
         </CardContent>
       </Card>
@@ -289,10 +307,11 @@ export function ExpenseList() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeletingExpense(null)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+            <AlertDialogCancel onClick={() => setDeletingExpense(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -1,13 +1,17 @@
-from pydantic import BaseModel, Field, field_validator, condecimal
-from uuid import UUID
 from datetime import date, datetime
-from decimal import Decimal
-from typing import Optional, Annotated
+from typing import Optional
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator
+
 from app.schemas.category import CategoryResponse
+from app.schemas.pagination import PaginationInfo
+from app.schemas.types import Money, MoneyIn
+from app.timeutil import today as app_today
 
 
 class ExpenseBase(BaseModel):
-    amount: Annotated[Decimal, Field(gt=0)] = Field(...)
+    amount: MoneyIn
     category_id: UUID
     note: Optional[str] = Field(None, max_length=500)
     expense_date: Optional[date] = None
@@ -15,7 +19,7 @@ class ExpenseBase(BaseModel):
     @field_validator("expense_date")
     @classmethod
     def validate_expense_date(cls, v):
-        if v is not None and v > date.today():
+        if v is not None and v > app_today():
             raise ValueError("Expense date cannot be in the future")
         return v
 
@@ -25,7 +29,7 @@ class ExpenseCreate(ExpenseBase):
 
 
 class ExpenseUpdate(BaseModel):
-    amount: Optional[Annotated[Decimal, Field(gt=0)]] = None
+    amount: Optional[MoneyIn] = None
     category_id: Optional[UUID] = None
     note: Optional[str] = Field(None, max_length=500)
     expense_date: Optional[date] = None
@@ -33,14 +37,14 @@ class ExpenseUpdate(BaseModel):
     @field_validator("expense_date")
     @classmethod
     def validate_expense_date(cls, v):
-        if v is not None and v > date.today():
+        if v is not None and v > app_today():
             raise ValueError("Expense date cannot be in the future")
         return v
 
 
 class ExpenseResponse(BaseModel):
     id: UUID
-    amount: Decimal
+    amount: Money
     category: CategoryResponse
     note: Optional[str]
     expense_date: date
@@ -48,13 +52,6 @@ class ExpenseResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class PaginationInfo(BaseModel):
-    page: int
-    limit: int
-    total_items: int
-    total_pages: int
 
 
 class ExpenseListResponse(BaseModel):

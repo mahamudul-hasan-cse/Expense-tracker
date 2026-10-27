@@ -5,14 +5,39 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { format, parseISO } from "date-fns";
+import { usePrefersReducedMotion } from "@/lib/use-reduced-motion";
 import { Category, Expense } from "@/types";
 import { DashboardSkeleton } from "@/components/shared/skeletons";
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 import { Plus, Edit2, ArrowRight, TrendingUp, Wallet, CalendarDays, Target } from "lucide-react";
 import Link from "next/link";
 import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
-import { useStats, useCategories, useExpenses, useUpcoming } from "@/lib/queries";
+import {
+  useStats,
+  useCategories,
+  useExpenses,
+  useUpcoming,
+  useMarkRecurringPaid,
+} from "@/lib/queries";
+import { useToast } from "@/hooks/use-toast";
+import { UpcomingReminder } from "@/types";
+import { dailyAverage, splitUpcoming } from "@/lib/stats";
 import { BudgetOverview } from "./budget-overview";
+import { CashflowRow } from "./cashflow-row";
+import { GoalsCard } from "./goals-card";
+import { InsightCard } from "@/components/assistant/insight-card";
 
 const CHART_COLORS = [
   "hsl(262, 83%, 58%)",
@@ -27,6 +52,7 @@ const CHART_COLORS = [
 
 export function Dashboard() {
   const [period, setPeriod] = useState<"weekly" | "monthly">("monthly");
+  const reducedMotion = usePrefersReducedMotion();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -42,6 +68,23 @@ export function Dashboard() {
   const upcoming = upcomingData?.upcoming ?? [];
 
   const loading = statsLoading || categoriesLoading || expensesLoading || upcomingLoading;
+
+  const { toast } = useToast();
+  const markPaid = useMarkRecurringPaid();
+  const handleMarkPaid = (reminder: UpcomingReminder) => {
+    markPaid.mutate(reminder.id, {
+      onSuccess: () =>
+        toast({
+          title: "Success",
+          description:
+            reminder.kind === "income"
+              ? `${reminder.name} recorded as income`
+              : `${reminder.name} recorded as an expense`,
+        }),
+      onError: (error) =>
+        toast({ title: "Error", description: error.message, variant: "destructive" }),
+    });
+  };
 
   const handleQuickAdd = (category: Category) => {
     setSelectedCategory(category);
@@ -65,19 +108,24 @@ export function Dashboard() {
     return <DashboardSkeleton />;
   }
 
-  const pieData = stats?.by_category.map((cat) => ({
-    name: cat.category_name,
-    value: Number(cat.total),
-    icon: cat.category_icon,
-  })) || [];
+  const pieData =
+    stats?.by_category.map((cat) => ({
+      name: cat.category_name,
+      value: Number(cat.total),
+      icon: cat.category_icon,
+    })) || [];
 
-  const barData = stats?.daily_totals.map((dt) => ({
-    date: new Date(dt.date).getDate().toString(),
-    total: Number(dt.total),
-  })) || [];
+  const barData =
+    stats?.daily_totals.map((dt) => ({
+      // Weekly: "Mon", "Tue"…; monthly: day of month
+      date: format(parseISO(dt.date), period === "weekly" ? "EEE" : "d"),
+      total: Number(dt.total),
+    })) || [];
 
   const totalSpent = Number(stats?.total_spent || 0);
-  const avgDaily = barData.length > 0 ? totalSpent / barData.length : 0;
+  // Per day so far this period (the whole period once it's over)
+  const avgDaily = stats ? dailyAverage(totalSpent, stats.start_date, stats.end_date) : 0;
+  const { bills: upcomingBills, income: upcomingIncome } = splitUpcoming(upcoming);
 
   return (
     <div className="space-y-8">
@@ -100,9 +148,7 @@ export function Dashboard() {
         <Card className="relative overflow-hidden">
           <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-primary/10" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Spent
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Spent</CardTitle>
             <div className="rounded-full bg-primary/10 p-2">
               <Wallet className="h-4 w-4 text-primary" />
             </div>
@@ -127,47 +173,54 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{formatCurrency(avgDaily)}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Per day average</p>
+            <p className="mt-1 text-xs text-muted-foreground">Per day so far</p>
           </CardContent>
         </Card>
 
         <Card className="relative overflow-hidden">
           <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-amber-500/10" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Categories
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Categories</CardTitle>
             <div className="rounded-full bg-amber-500/10 p-2">
               <Target className="h-4 w-4 text-amber-500" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{pieData.length}</div>
-            <p className="mt-1 text-xs text-muted-foreground">With spending this {period === "weekly" ? "week" : "month"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              With spending this {period === "weekly" ? "week" : "month"}
+            </p>
           </CardContent>
         </Card>
 
         <Card className="relative overflow-hidden">
           <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-rose-500/10" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Upcoming Bills
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Bills Due</CardTitle>
             <div className="rounded-full bg-rose-500/10 p-2">
               <CalendarDays className="h-4 w-4 text-rose-500" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{upcoming.length}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Due within 7 days</p>
+            <div className="text-3xl font-bold">{upcomingBills.length}</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Within 7 days
+              {upcomingIncome.length > 0 && ` · ${upcomingIncome.length} income expected`}
+            </p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Income / Spent / Saved this month */}
+      <CashflowRow />
+
+      {/* AI weekly insight (only when the assistant is on) */}
+      <InsightCard />
+
       {/* Charts Row */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Pie Chart */}
-        <Card>
+        <Card role="region" aria-label="Spending by Category">
           <CardHeader>
             <CardTitle>Spending by Category</CardTitle>
           </CardHeader>
@@ -184,17 +237,21 @@ export function Dashboard() {
                       outerRadius={90}
                       paddingAngle={2}
                       dataKey="value"
+                      isAnimationActive={!reducedMotion}
                     >
                       {pieData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={CHART_COLORS[index % CHART_COLORS.length]}
+                        />
                       ))}
                     </Pie>
-                    <Tooltip 
+                    <Tooltip
                       formatter={(value: number) => formatCurrency(value)}
-                      contentStyle={{ 
-                        borderRadius: '8px',
-                        border: '1px solid hsl(var(--border))',
-                        backgroundColor: 'hsl(var(--card))'
+                      contentStyle={{
+                        borderRadius: "8px",
+                        border: "1px solid hsl(var(--border))",
+                        backgroundColor: "hsl(var(--card))",
                       }}
                     />
                   </PieChart>
@@ -202,8 +259,8 @@ export function Dashboard() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {pieData.slice(0, 6).map((item, index) => (
                     <div key={item.name} className="flex items-center gap-2">
-                      <div 
-                        className="h-3 w-3 rounded-full" 
+                      <div
+                        className="h-3 w-3 rounded-full"
                         style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
                       />
                       <span className="truncate text-muted-foreground">{item.name}</span>
@@ -220,7 +277,7 @@ export function Dashboard() {
         </Card>
 
         {/* Bar Chart */}
-        <Card>
+        <Card role="region" aria-label="Daily Spending Trend">
           <CardHeader>
             <CardTitle>Daily Spending Trend</CardTitle>
           </CardHeader>
@@ -228,31 +285,38 @@ export function Dashboard() {
             {barData.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={barData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false} 
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="hsl(var(--border))"
                   />
-                  <YAxis 
-                    axisLine={false} 
+                  <XAxis
+                    dataKey="date"
+                    axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    tickFormatter={(value) => `$${value}`}
+                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
                   />
-                  <Tooltip 
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={(value) => `৳${value}`}
+                  />
+                  <Tooltip
                     formatter={(value: number) => formatCurrency(value)}
-                    contentStyle={{ 
-                      borderRadius: '8px',
-                      border: '1px solid hsl(var(--border))',
-                      backgroundColor: 'hsl(var(--card))'
+                    contentStyle={{
+                      borderRadius: "8px",
+                      border: "1px solid hsl(var(--border))",
+                      backgroundColor: "hsl(var(--card))",
                     }}
                   />
-                  <Bar 
-                    dataKey="total" 
-                    fill="hsl(var(--primary))" 
-                    radius={[6, 6, 0, 0]} 
+                  <Bar
+                    dataKey="total"
+                    fill="hsl(var(--primary))"
+                    radius={[6, 6, 0, 0]}
+                    // Animating re-layouts (e.g. a resize) slid bars in from stale
+                    // positions; users who ask for reduced motion get static charts
+                    isAnimationActive={!reducedMotion}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -266,7 +330,10 @@ export function Dashboard() {
       </div>
 
       {/* Budget Overview */}
-      <BudgetOverview />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <BudgetOverview />
+        <GoalsCard />
+      </div>
 
       {/* Quick Add */}
       <Card>
@@ -304,9 +371,9 @@ export function Dashboard() {
       {/* Bottom Row */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Upcoming Reminders */}
-        <Card>
+        <Card role="region" aria-label="Upcoming bills and income">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Upcoming Bills</CardTitle>
+            <CardTitle>Upcoming Bills &amp; Income</CardTitle>
             <Link href="/settings">
               <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground">
                 Manage <ArrowRight className="h-4 w-4" />
@@ -336,20 +403,36 @@ export function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <p className="text-lg font-bold">{formatCurrency(Number(reminder.amount))}</p>
+                    <div className="flex flex-col items-end gap-1">
+                      <p
+                        className={`text-lg font-bold ${reminder.kind === "income" ? "text-emerald-600 dark:text-emerald-400" : ""}`}
+                      >
+                        {reminder.kind === "income" ? "+" : ""}
+                        {formatCurrency(Number(reminder.amount))}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleMarkPaid(reminder)}
+                        disabled={markPaid.isPending}
+                        aria-label={`${reminder.kind === "income" ? "Mark received" : "Mark paid"}: ${reminder.name}`}
+                      >
+                        {reminder.kind === "income" ? "Mark received" : "Mark paid"}
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-                No upcoming bills
+                Nothing due in the next 7 days
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* Recent Expenses */}
-        <Card>
+        <Card role="region" aria-label="Recent Expenses">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Recent Expenses</CardTitle>
             <Link href="/expenses">
@@ -384,7 +467,8 @@ export function Dashboard() {
                         variant="ghost"
                         size="icon"
                         onClick={() => handleEdit(expense)}
-                        className="opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-label={`Edit ${expense.category.name} expense, ${formatCurrency(Number(expense.amount))}`}
+                        className="text-muted-foreground"
                       >
                         <Edit2 className="h-4 w-4" />
                       </Button>

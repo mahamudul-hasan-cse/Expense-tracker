@@ -1,13 +1,19 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, QueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import {
   ExpenseCreate,
   ExpenseUpdate,
   CategoryCreate,
+  CategoryUpdate,
   RecurringExpenseCreate,
   RecurringExpenseUpdate,
   BudgetCreate,
   BudgetUpdate,
+  ContributionCreate,
+  GoalCreate,
+  GoalUpdate,
+  IncomeCreate,
+  IncomeUpdate,
 } from "@/types";
 
 // Query Keys
@@ -22,12 +28,21 @@ export const queryKeys = {
     search?: string;
   }) => ["expenses", params] as const,
   recurring: ["recurring"] as const,
-  stats: (period: "weekly" | "monthly", date?: string) =>
-    ["stats", period, date] as const,
+  stats: (period: "weekly" | "monthly", date?: string) => ["stats", period, date] as const,
   upcoming: ["upcoming"] as const,
   budgets: (month?: number, year?: number) => ["budgets", month, year] as const,
   budgetSummary: (month?: number, year?: number) => ["budgetSummary", month, year] as const,
 };
+
+// Everything derived from expenses: lists, stats, and budget spending
+export function invalidateExpenseData(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["expenses"] });
+  queryClient.invalidateQueries({ queryKey: ["stats"] });
+  queryClient.invalidateQueries({ queryKey: ["budgets"] });
+  queryClient.invalidateQueries({ queryKey: ["budgetSummary"] });
+  // Spending changes Saved
+  queryClient.invalidateQueries({ queryKey: ["cashflow"] });
+}
 
 // Categories
 export function useCategories() {
@@ -44,6 +59,21 @@ export function useCreateCategory() {
     mutationFn: (data: CategoryCreate) => api.createCategory(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+    },
+  });
+}
+
+export function useUpdateCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: CategoryUpdate }) =>
+      api.updateCategory(id, data),
+    onSuccess: () => {
+      // Category names/icons are embedded in expenses, stats, budgets and recurring items
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      queryClient.invalidateQueries({ queryKey: queryKeys.recurring });
+      queryClient.invalidateQueries({ queryKey: queryKeys.upcoming });
+      invalidateExpenseData(queryClient);
     },
   });
 }
@@ -78,8 +108,7 @@ export function useCreateExpense() {
   return useMutation({
     mutationFn: (data: ExpenseCreate) => api.createExpense(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      invalidateExpenseData(queryClient);
     },
   });
 }
@@ -87,11 +116,9 @@ export function useCreateExpense() {
 export function useUpdateExpense() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: ExpenseUpdate }) =>
-      api.updateExpense(id, data),
+    mutationFn: ({ id, data }: { id: string; data: ExpenseUpdate }) => api.updateExpense(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      invalidateExpenseData(queryClient);
     },
   });
 }
@@ -101,8 +128,7 @@ export function useDeleteExpense() {
   return useMutation({
     mutationFn: (id: string) => api.deleteExpense(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      invalidateExpenseData(queryClient);
     },
   });
 }
@@ -193,8 +219,7 @@ export function useCreateBudget() {
 export function useUpdateBudget() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: BudgetUpdate }) =>
-      api.updateBudget(id, data),
+    mutationFn: ({ id, data }: { id: string; data: BudgetUpdate }) => api.updateBudget(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       queryClient.invalidateQueries({ queryKey: ["budgetSummary"] });
@@ -210,5 +235,197 @@ export function useDeleteBudget() {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       queryClient.invalidateQueries({ queryKey: ["budgetSummary"] });
     },
+  });
+}
+
+// Income
+export function useIncomeCategories() {
+  return useQuery({
+    queryKey: ["incomeCategories"],
+    queryFn: () => api.getIncomeCategories(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useCreateIncomeCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CategoryCreate) => api.createIncomeCategory(data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["incomeCategories"] }),
+  });
+}
+
+export function useUpdateIncomeCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: CategoryUpdate }) =>
+      api.updateIncomeCategory(id, data),
+    onSuccess: () => {
+      // Names/icons are embedded in income entries and recurring income
+      queryClient.invalidateQueries({ queryKey: ["incomeCategories"] });
+      queryClient.invalidateQueries({ queryKey: ["incomes"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.recurring });
+      queryClient.invalidateQueries({ queryKey: queryKeys.upcoming });
+    },
+  });
+}
+
+export function useDeleteIncomeCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteIncomeCategory(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["incomeCategories"] }),
+  });
+}
+
+export function useIncomes(params?: {
+  page?: number;
+  limit?: number;
+  start_date?: string;
+  end_date?: string;
+}) {
+  return useQuery({
+    queryKey: ["incomes", params],
+    queryFn: () => api.getIncomes(params),
+  });
+}
+
+function invalidateIncomeData(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["incomes"] });
+  queryClient.invalidateQueries({ queryKey: ["cashflow"] });
+}
+
+export function useCreateIncome() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: IncomeCreate) => api.createIncome(data),
+    onSuccess: () => invalidateIncomeData(queryClient),
+  });
+}
+
+export function useUpdateIncome() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: IncomeUpdate }) => api.updateIncome(id, data),
+    onSuccess: () => invalidateIncomeData(queryClient),
+  });
+}
+
+export function useDeleteIncome() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteIncome(id),
+    onSuccess: () => invalidateIncomeData(queryClient),
+  });
+}
+
+export function useCashflow(month?: string) {
+  return useQuery({
+    queryKey: ["cashflow", month],
+    queryFn: () => api.getCashflow(month),
+  });
+}
+
+// Recurring: mark this cycle paid (bill) or received (income)
+export function useMarkRecurringPaid() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.markRecurringPaid(id),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.recurring });
+      queryClient.invalidateQueries({ queryKey: queryKeys.upcoming });
+      if (result.record_type === "expense") invalidateExpenseData(queryClient);
+      else invalidateIncomeData(queryClient);
+    },
+  });
+}
+
+// Savings goals (contributions are allocations: they change goals and the
+// cashflow's "allocated" figure, never spending)
+export function useGoals() {
+  return useQuery({ queryKey: ["goals"], queryFn: () => api.getGoals() });
+}
+
+function invalidateGoalData(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["goals"] });
+  queryClient.invalidateQueries({ queryKey: ["cashflow"] });
+}
+
+export function useCreateGoal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: GoalCreate) => api.createGoal(data),
+    onSuccess: () => invalidateGoalData(queryClient),
+  });
+}
+
+export function useUpdateGoal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: GoalUpdate }) => api.updateGoal(id, data),
+    onSuccess: () => invalidateGoalData(queryClient),
+  });
+}
+
+export function useDeleteGoal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteGoal(id),
+    onSuccess: () => invalidateGoalData(queryClient),
+  });
+}
+
+// Assistant
+export function useAssistantStatus() {
+  return useQuery({ queryKey: ["assistantStatus"], queryFn: () => api.getAssistantStatus() });
+}
+
+export function useSetAssistantEnabled() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => api.setAssistantEnabled(enabled),
+    onSuccess: (status) => queryClient.setQueryData(["assistantStatus"], status),
+  });
+}
+
+/** Written by the server at most once a day; no retries (each try can cost money). */
+export function useWeeklyInsight(enabled: boolean) {
+  return useQuery({
+    queryKey: ["weeklyInsight"],
+    queryFn: () => api.getWeeklyInsight(),
+    enabled,
+    retry: false,
+    staleTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useConversations(enabled = true) {
+  return useQuery({
+    queryKey: ["conversations"],
+    queryFn: () => api.getConversations(),
+    enabled,
+  });
+}
+
+export function useDeleteConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string | null) =>
+      id ? api.deleteConversation(id) : api.deleteAllConversations(),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      // Deleting all history also clears the saved weekly insight
+      if (id === null) queryClient.removeQueries({ queryKey: ["weeklyInsight"] });
+    },
+  });
+}
+
+export function useAddContribution() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ goalId, data }: { goalId: string; data: ContributionCreate }) =>
+      api.addContribution(goalId, data),
+    onSuccess: () => invalidateGoalData(queryClient),
   });
 }
