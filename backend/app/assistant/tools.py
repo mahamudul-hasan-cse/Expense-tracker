@@ -342,7 +342,7 @@ def get_budgets_status(ctx: ToolContext, args: BudgetsStatusArgs) -> dict[str, A
                 "at_risk": s > budget.amount or projected > budget.amount,
             }
         )
-    items.sort(key=lambda i: i["used_pct"] or 0, reverse=True)
+    items.sort(key=lambda i: float(i["used_pct"] or 0), reverse=True)  # type: ignore[arg-type]
     total_limit = sum((b.amount for b, _ in budgets), Decimal("0"))
     total_spent = sum((spent.get(b.category_id, Decimal("0")) for b, _ in budgets), Decimal("0"))
     return {

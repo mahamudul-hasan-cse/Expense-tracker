@@ -3,7 +3,7 @@ from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import UnaryExpression, asc, desc
+from sqlalchemy import UnaryExpression
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -52,12 +52,12 @@ def get_expenses(
 
     # Apply sorting
     sort_mapping: dict[str, UnaryExpression] = {
-        "date_desc": desc(Expense.expense_date),
-        "date_asc": asc(Expense.expense_date),
-        "amount_desc": desc(Expense.amount),
-        "amount_asc": asc(Expense.amount),
+        "date_desc": Expense.expense_date.desc(),
+        "date_asc": Expense.expense_date.asc(),
+        "amount_desc": Expense.amount.desc(),
+        "amount_asc": Expense.amount.asc(),
     }
-    query = query.order_by(sort_mapping[sort], desc(Expense.created_at), Expense.id)
+    query = query.order_by(sort_mapping[sort], Expense.created_at.desc(), Expense.id)
 
     expenses, pagination = paginate(query, page, limit)
     return ExpenseListResponse(expenses=expenses, pagination=pagination)

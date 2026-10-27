@@ -7,7 +7,6 @@ dependencies = [
     "fastapi==0.109.0",
     "uvicorn[standard]==0.54.0",
     "sqlalchemy==2.1.6",
-    "psycopg2-binary==2.9.13",
     "alembic==1.20.1",
     "pydantic==2.14.1",
     "pydantic-settings==2.1.0",
@@ -18,13 +17,16 @@ dependencies = [
     "slowapi>=0.1.9",
     "tzdata>=2024.1",
     "openai>=1.50",
+    "psycopg[binary]==3.3.6",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
-    "httpx>=0.25,<0.29",
+    # <0.28 until FastAPI is upgraded: 0.28 removed the `app=` argument the TestClient of
+    # FastAPI 0.109 (Starlette 0.35) still uses
+    "httpx>=0.25,<0.28",
     "pytest-cov>=5",
     "ruff>=0.6",
     "mypy>=1.11",

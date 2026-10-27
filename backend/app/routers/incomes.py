@@ -3,7 +3,7 @@ from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import UnaryExpression, asc, desc
+from sqlalchemy import UnaryExpression
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -54,12 +54,12 @@ def get_incomes(
         query = query.filter(Income.note.ilike(f"%{escaped}%", escape="\\"))
 
     sort_mapping: dict[str, UnaryExpression] = {
-        "date_desc": desc(Income.income_date),
-        "date_asc": asc(Income.income_date),
-        "amount_desc": desc(Income.amount),
-        "amount_asc": asc(Income.amount),
+        "date_desc": Income.income_date.desc(),
+        "date_asc": Income.income_date.asc(),
+        "amount_desc": Income.amount.desc(),
+        "amount_asc": Income.amount.asc(),
     }
-    query = query.order_by(sort_mapping[sort], desc(Income.created_at), Income.id)
+    query = query.order_by(sort_mapping[sort], Income.created_at.desc(), Income.id)
     incomes, pagination = paginate(query, page, limit)
     return IncomeListResponse(incomes=incomes, pagination=pagination)
 
