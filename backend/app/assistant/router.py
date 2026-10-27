@@ -5,8 +5,9 @@ from typing import Any, AsyncIterator, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.orm import Session
 
 from app.assistant.llm_client import LLMClient
@@ -18,6 +19,8 @@ from app.errors import error_response
 from app.models.assistant import AssistantConversation, AssistantMessage
 from app.models.user import User
 from app.pagination import paginate
+from app.routers.expenses import add_expense
+from app.schemas.expense import ExpenseCreate, ExpenseUpdate
 from app.schemas.pagination import PaginationInfo
 
 router = APIRouter(prefix="/assistant", tags=["Assistant"])
@@ -77,7 +80,10 @@ class MessageResponse(BaseModel):
     role: Literal["user", "assistant"]
     content: str
     proposal: Optional[dict[str, Any]]
-    proposal_status: Optional[str]
+    # pending | confirmed | cancelled | expired (pending for longer than 24 hours)
+    proposal_status: Optional[str] = Field(None, validation_alias="proposal_state")
+    # The expense a confirmed proposal created (null if it was deleted later)
+    expense_id: Optional[UUID] = Field(None, validation_alias="proposal_expense_id")
     status: str
     created_at: datetime
 
@@ -87,10 +93,6 @@ class MessageResponse(BaseModel):
 
 class ConversationDetail(ConversationSummary):
     messages: list[MessageResponse]
-
-
-class ProposalUpdate(BaseModel):
-    status: Literal["confirmed", "cancelled"]
 
 
 # --- Endpoints -------------------------------------------------------------------------------
@@ -231,30 +233,71 @@ def delete_all_conversations(db: Session = Depends(get_db), current_user: User =
     return None
 
 
-@router.patch("/messages/{message_id}/proposal", response_model=MessageResponse)
-def update_proposal(
-    message_id: UUID,
-    data: ProposalUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Record what the user did with a quick-add proposal.
-
-    Confirming here only records the choice; the expense itself is created by the
-    client through the normal POST /expenses endpoint and its validation.
-    """
+def _locked_proposal(db: Session, message_id: UUID, user: User) -> AssistantMessage:
+    """The user's proposal message, row-locked until commit so concurrent confirms serialize."""
     message = (
         db.query(AssistantMessage)
-        .filter(AssistantMessage.id == message_id, AssistantMessage.user_id == current_user.id)
+        .filter(AssistantMessage.id == message_id, AssistantMessage.user_id == user.id)
+        .with_for_update()
         .first()
     )
     if not message or message.proposal is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal not found")
-    if message.proposal_status != "pending":
+    return message
+
+
+@router.post("/messages/{message_id}/proposal/confirm", response_model=MessageResponse)
+def confirm_proposal(
+    message_id: UUID,
+    edits: Optional[ExpenseUpdate] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save a quick-add proposal as an expense (optionally with the user's edits from the card).
+
+    Idempotent: a double click or a retry after a lost response returns the same
+    message and expense_id instead of adding a second expense. Uses the same
+    validation and category check as POST /expenses.
+    """
+    message = _locked_proposal(db, message_id, current_user)
+    if message.proposal_status == "confirmed":
+        db.rollback()  # release the lock; nothing to change
+        return message
+    if message.proposal_status == "cancelled":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Proposal was cancelled")
+    if message.proposal_expired:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Proposal expired; ask again to log it")
+
+    proposal = message.proposal or {}  # never None here: _locked_proposal checked it
+    proposed = {k: proposal.get(k) for k in ("amount", "category_id", "expense_date", "note")}
+    changes = edits.model_dump(exclude_unset=True) if edits else {}
+    try:
+        expense_data = ExpenseCreate.model_validate({**proposed, **changes})
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors(), body=changes) from exc
+
+    expense = add_expense(db, current_user, expense_data)
+    message.proposal_status = "confirmed"
+    message.proposal_expense_id = expense.id
+    db.commit()
+    db.refresh(message)
+    return message
+
+
+@router.post("/messages/{message_id}/proposal/cancel", response_model=MessageResponse)
+def cancel_proposal(
+    message_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Dismiss a quick-add proposal. Cancelling twice is fine; a confirmed one can't be cancelled."""
+    message = _locked_proposal(db, message_id, current_user)
+    if message.proposal_status == "confirmed":
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Proposal already {message.proposal_status}"
+            status_code=status.HTTP_409_CONFLICT, detail="Proposal already saved; delete the expense instead"
         )
-    message.proposal_status = data.status
+    if message.proposal_status != "cancelled":
+        message.proposal_status = "cancelled"
     db.commit()
     db.refresh(message)
     return message

@@ -115,6 +115,19 @@ def test_zdr_can_be_turned_off_and_tools_disabled():
     assert seen["tool_choice"] == "none"
 
 
+def test_reasoning_effort_is_sent_only_when_set():
+    seen = {}
+
+    async def create(**kwargs):
+        seen.update(kwargs)
+        return FakeStream([chunk(content="ok", finish="stop")])
+
+    collect(make_client(create))
+    assert "reasoning" not in seen["extra_body"]  # the model's own default
+    collect(make_client(create, assistant_reasoning_effort="low"))
+    assert seen["extra_body"]["reasoning"] == {"effort": "low", "exclude": True}
+
+
 def test_mid_stream_error_finish_reason():
     async def create(**kwargs):
         return FakeStream([chunk(content="par"), chunk(finish="error")])

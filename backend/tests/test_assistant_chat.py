@@ -2,6 +2,8 @@
 
 import copy
 import json
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -21,7 +23,7 @@ from app.assistant.router import get_llm_client
 from app.config import get_settings
 from app.database import SessionLocal
 from app.main import app
-from app.models.assistant import AssistantUsage
+from app.models.assistant import AssistantMessage, AssistantUsage
 from tests.conftest import register
 
 API = "/api/v1"
@@ -164,6 +166,22 @@ def test_text_reply_streams_and_is_saved(client, enabled, use_llm):
     assert [(m["role"], m["content"]) for m in detail["messages"]] == [("user", "hi"), ("assistant", "Hello there!")]
     listed = client.get(f"{API}/assistant/conversations", headers=enabled).json()
     assert [c["id"] for c in listed["conversations"]] == [convo_id]
+
+
+def test_bangla_digits_are_always_sent_as_english_digits(client, enabled, use_llm):
+    """Real Bangla answers slipped into ০-৯ despite the prompt; the server enforces 0-9."""
+    use_llm(FakeLLM([[TextDelta("এই মাসে ৳১২,"), TextDelta("৪৫০ খরচ (৩৮%), ২৭ অক্টোবর পর্যন্ত")]]))
+    events = sse(chat(client, enabled, "এই মাসে কত খরচ?"))
+    text = "".join(d["text"] for e, d in events if e == "token")
+    assert text == "এই মাসে ৳12,450 খরচ (38%), 27 অক্টোবর পর্যন্ত"
+    saved = client.get(f"{API}/assistant/conversations/{events[0][1]['id']}", headers=enabled).json()
+    assert saved["messages"][-1]["content"] == text
+
+
+def test_text_before_and_after_a_tool_call_stays_in_separate_paragraphs(client, enabled, use_llm):
+    use_llm(FakeLLM([[TextDelta("Let me check."), *tool_round(("list_categories", {}))], [TextDelta("Food is top.")]]))
+    events = sse(chat(client, enabled, "top category?"))
+    assert "".join(d["text"] for e, d in events if e == "token") == "Let me check.\n\nFood is top."
 
 
 def test_continuing_sends_recent_history(client, enabled, use_llm, monkeypatch):
@@ -313,28 +331,110 @@ def test_quick_add_proposal_requires_user_confirmation(client, enabled, use_llm)
 
     convo = client.get(f"{API}/assistant/conversations/{events[0][1]['id']}", headers=enabled).json()
     reply = convo["messages"][-1]
+    assert reply["id"] == dict(events)["done"]["message_id"]
     assert reply["proposal"]["amount"] == 80 and reply["proposal_status"] == "pending"
+    assert reply["expense_id"] is None
 
-    # The user confirms: client saves through the normal endpoint, then records the choice
-    saved = client.post(
-        f"{API}/expenses",
-        json={
-            "amount": proposal["amount"],
-            "category_id": proposal["category_id"],
-            "expense_date": proposal["expense_date"],
-            "note": proposal["note"],
-        },
-        headers=enabled,
-    )
-    assert saved.status_code == 201
-    marked = client.patch(
-        f"{API}/assistant/messages/{reply['id']}/proposal", json={"status": "confirmed"}, headers=enabled
-    )
-    assert marked.json()["proposal_status"] == "confirmed"
-    again = client.patch(
-        f"{API}/assistant/messages/{reply['id']}/proposal", json={"status": "cancelled"}, headers=enabled
-    )
-    assert again.status_code == 400
+    confirmed = confirm(client, enabled, reply["id"])
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["proposal_status"] == "confirmed"
+    expenses = client.get(f"{API}/expenses", headers=enabled).json()["expenses"]
+    assert len(expenses) == 1 and expenses[0]["id"] == confirmed.json()["expense_id"]
+    assert (expenses[0]["amount"], expenses[0]["category"]["name"], expenses[0]["note"]) == (80, "Rickshaw", "office")
+    # A confirmed card can't be cancelled
+    assert cancel(client, enabled, reply["id"]).status_code == 409
+
+
+def propose(client, headers, use_llm, amount=80, **extra) -> str:
+    """Chat once with a scripted propose_expense call; return the proposal's message id."""
+    args = {"amount": amount, "category": "rickshaw", **extra}
+    use_llm(FakeLLM([tool_round(("propose_expense", args)), [TextDelta("Confirm the card.")]]))
+    return dict(sse(chat(client, headers, f"rickshaw {amount}")))["done"]["message_id"]
+
+
+def confirm(client, headers, message_id, edits=None):
+    return client.post(f"{API}/assistant/messages/{message_id}/proposal/confirm", json=edits, headers=headers)
+
+
+def cancel(client, headers, message_id):
+    return client.post(f"{API}/assistant/messages/{message_id}/proposal/cancel", headers=headers)
+
+
+def expense_count(client, headers) -> int:
+    return client.get(f"{API}/expenses", headers=headers).json()["pagination"]["total_items"]
+
+
+def test_confirm_is_idempotent(client, enabled, use_llm):
+    """A double click or a retry after a lost response must not add a second expense."""
+    message_id = propose(client, enabled, use_llm)
+    first = confirm(client, enabled, message_id).json()
+    second = confirm(client, enabled, message_id).json()
+    assert second["expense_id"] == first["expense_id"] is not None
+    assert expense_count(client, enabled) == 1
+
+
+def test_concurrent_confirms_create_one_expense(client, enabled, use_llm):
+    """Parallel confirms are serialized by the row lock: one expense, same id for everyone."""
+    message_id = propose(client, enabled, use_llm)
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        results = list(pool.map(lambda _: confirm(client, enabled, message_id), range(5)))
+    assert [r.status_code for r in results] == [200] * 5
+    assert len({r.json()["expense_id"] for r in results}) == 1
+    assert expense_count(client, enabled) == 1
+
+
+def test_confirm_with_edits_uses_manual_entry_validation(client, enabled, use_llm):
+    message_id = propose(client, enabled, use_llm)
+    # Same rules as POST /expenses: no future dates, no third decimal
+    assert confirm(client, enabled, message_id, {"expense_date": "2999-01-01"}).status_code == 422
+    assert confirm(client, enabled, message_id, {"amount": 1.234}).status_code == 422
+    # Someone else's category is rejected like on the expense form
+    bob = register(client, "bob@example.com")
+    bob_category = client.get(f"{API}/categories", headers=bob).json()["categories"][0]["id"]
+    foreign = confirm(client, enabled, message_id, {"category_id": bob_category})
+    manual = client.post(f"{API}/expenses", json={"amount": 95, "category_id": bob_category}, headers=enabled)
+    assert foreign.status_code == manual.status_code == 400
+    assert expense_count(client, enabled) == 0
+
+    saved = confirm(client, enabled, message_id, {"amount": 95, "note": "office, with tip"})
+    assert saved.status_code == 200
+    expense = client.get(f"{API}/expenses", headers=enabled).json()["expenses"][0]
+    assert (expense["amount"], expense["note"]) == (95, "office, with tip")
+
+
+def test_cancel_then_confirm_is_refused(client, enabled, use_llm):
+    message_id = propose(client, enabled, use_llm)
+    assert cancel(client, enabled, message_id).json()["proposal_status"] == "cancelled"
+    assert cancel(client, enabled, message_id).status_code == 200  # cancelling twice is fine
+    assert confirm(client, enabled, message_id).status_code == 409
+    assert expense_count(client, enabled) == 0
+
+
+def test_proposal_expires_after_24_hours(client, enabled, use_llm):
+    message_id = propose(client, enabled, use_llm)
+    with SessionLocal() as db:
+        db.query(AssistantMessage).filter(AssistantMessage.id == message_id).update(
+            {AssistantMessage.created_at: datetime.now(timezone.utc) - timedelta(hours=24, minutes=1)}
+        )
+        db.commit()
+    convo_id = client.get(f"{API}/assistant/conversations", headers=enabled).json()["conversations"][0]["id"]
+    messages = client.get(f"{API}/assistant/conversations/{convo_id}", headers=enabled).json()["messages"]
+    reply = next(m for m in messages if m["id"] == message_id)
+    assert reply["proposal_status"] == "expired"
+    refused = confirm(client, enabled, message_id)
+    assert refused.status_code == 409 and "expired" in refused.text
+    assert expense_count(client, enabled) == 0
+    # Dismissing an expired card is still allowed
+    assert cancel(client, enabled, message_id).json()["proposal_status"] == "cancelled"
+
+
+def test_deleting_the_expense_keeps_the_card_confirmed(client, enabled, use_llm):
+    message_id = propose(client, enabled, use_llm)
+    expense_id = confirm(client, enabled, message_id).json()["expense_id"]
+    assert client.delete(f"{API}/expenses/{expense_id}", headers=enabled).status_code == 204
+    again = confirm(client, enabled, message_id).json()
+    assert again["proposal_status"] == "confirmed" and again["expense_id"] is None
+    assert expense_count(client, enabled) == 0
 
 
 def test_bangla_digits_proposal_via_tool(client, enabled, use_llm):
@@ -366,12 +466,8 @@ def test_conversations_are_private(client, enabled, use_llm):
     assert client.get(f"{API}/assistant/conversations/{convo_id}", headers=bob).status_code == 404
     assert client.delete(f"{API}/assistant/conversations/{convo_id}", headers=bob).status_code == 404
     assert chat(client, bob, "continue alice's chat", convo_id).status_code == 404
-    assert (
-        client.patch(
-            f"{API}/assistant/messages/{message_id}/proposal", json={"status": "confirmed"}, headers=bob
-        ).status_code
-        == 404
-    )
+    assert confirm(client, bob, message_id).status_code == 404
+    assert cancel(client, bob, message_id).status_code == 404
     assert client.get(f"{API}/assistant/conversations/{convo_id}", headers=enabled).status_code == 200
 
 

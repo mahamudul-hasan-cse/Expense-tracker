@@ -172,6 +172,10 @@ class LLMClient:
             extra_body["models"] = self.models  # OpenRouter fallback order
         if session_id:
             extra_body["session_id"] = session_id  # sticky routing keeps the prompt cache warm
+        if self.settings.assistant_reasoning_effort:
+            # Less hidden "thinking" = faster first token and fewer billed output tokens.
+            # exclude: the reasoning text itself is never returned to us.
+            extra_body["reasoning"] = {"effort": self.settings.assistant_reasoning_effort, "exclude": True}
 
         started = time.monotonic()
         partial: dict[int, dict[str, str]] = {}

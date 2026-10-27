@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     assistant_global_daily_budget_usd: float = 1.0
     # Includes hidden reasoning tokens (Haiku 5.5 used ~150-460 of them per answer in testing)
     assistant_max_output_tokens: int = 1600
+    # OpenRouter `reasoning.effort` (none|minimal|low|medium|high); empty = the model's default.
+    # Set from the A4 latency measurement; reasoning text is never sent back to the app.
+    assistant_reasoning_effort: Literal["", "none", "minimal", "low", "medium", "high"] = ""
     assistant_max_tool_calls: int = 8
     assistant_history_messages: int = 20
     assistant_timeout_seconds: float = 60.0

@@ -70,22 +70,32 @@ def create_expense(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new expense."""
-    # Verify category exists and belongs to the user
-    get_user_category(db, expense_data.category_id, current_user)
+    expense = add_expense(db, current_user, expense_data)
+    db.commit()
+    db.refresh(expense)
 
+    # Load category relationship
+    db.refresh(expense, ["category"])
+    return expense
+
+
+def add_expense(db: Session, user: User, expense_data: ExpenseCreate) -> Expense:
+    """Validate ownership and add an expense to the session (caller commits).
+
+    Shared by POST /expenses and the assistant's quick-add confirmation, so both
+    go through the same schema validation and category check.
+    """
+    # Verify category exists and belongs to the user
+    get_user_category(db, expense_data.category_id, user)
     expense = Expense(
-        user_id=current_user.id,
+        user_id=user.id,
         amount=expense_data.amount,
         category_id=expense_data.category_id,
         note=expense_data.note,
         expense_date=expense_data.expense_date or app_today(),
     )
     db.add(expense)
-    db.commit()
-    db.refresh(expense)
-
-    # Load category relationship
-    db.refresh(expense, ["category"])
+    db.flush()
     return expense
 
 

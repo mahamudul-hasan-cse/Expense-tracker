@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -20,6 +20,9 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+# A quick-add card can be confirmed for this long; after that it shows as expired
+PROPOSAL_TTL = timedelta(hours=24)
 
 
 class AssistantConversation(Base):
@@ -61,6 +64,10 @@ class AssistantMessage(Base):
     # Quick-add: a proposed expense the user can confirm (never saved by the model)
     proposal: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     proposal_status: Mapped[str | None] = mapped_column(String(10), nullable=True)  # pending|confirmed|cancelled
+    # The expense created on confirm; a retried confirm returns this instead of adding another
+    proposal_expense_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("expenses.id", ondelete="SET NULL"), nullable=True
+    )
     model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="ok")  # ok|interrupted|error
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -72,6 +79,17 @@ class AssistantMessage(Base):
     )
 
     conversation: Mapped[AssistantConversation] = relationship("AssistantConversation", back_populates="messages")
+
+    @property
+    def proposal_state(self) -> str | None:
+        """proposal_status, plus "expired" for a pending proposal older than PROPOSAL_TTL."""
+        if self.proposal_status == "pending" and self.proposal_expired:
+            return "expired"
+        return self.proposal_status
+
+    @property
+    def proposal_expired(self) -> bool:
+        return self.created_at is not None and datetime.now(timezone.utc) - self.created_at > PROPOSAL_TTL
 
 
 class AssistantUsage(Base):

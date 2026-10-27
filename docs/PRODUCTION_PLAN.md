@@ -330,6 +330,23 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
   4. `assistant-usage` relied on the DB knowing the `Asia/Dhaka` name. Now grouped in Python.
 - Dev tools: `scripts/try_assistant.py` (real calls with a full trace), `scripts/check_streaming.py` (SSE timing through a proxy)
 
+### Assistant hardening (2026-10-27)
+*Verified: backend tests green (new: idempotent/concurrent confirm, edits validated like manual entry, cancel, 24h expiry, deleted expense, English digits, round separation, reasoning param). Real spend this step **$0.0133**.*
+- [x] **English digits everywhere.** Prompt rule added, but real Bangla answers still used ০-৯ under every reasoning setting, so the server now converts ০-৯ → 0-9 in every streamed token (and the saved text). Confirmation cards format with `en-BD` (0-9).
+- [x] **Quick-add confirm is done by the server:** `POST /assistant/messages/{id}/proposal/confirm` locks the row (`SELECT … FOR UPDATE`), creates the expense through the same validation and category check as `POST /expenses` (shared `add_expense`), stores `proposal_expense_id` (migration `a3c5e7f9b1d2`, additive), and returns the same expense on a retry or double click (5 parallel confirms → 1 expense). Optional edits in the body are validated the same way.
+- [x] `POST …/proposal/cancel` (cancelling twice is fine; a saved one can't be cancelled). Proposals **expire after 24 hours** (`proposal_status: "expired"`, confirm returns 409). The old `PATCH …/proposal` is removed (no client used it).
+- [x] Text before a tool call and the answer after it are kept as separate paragraphs (they used to run together: "…unusual items.Your spending…").
+- [x] Prompt: suggest splitting a catch-all category ("Random", "Other") when it's ≥15% of spending or in the top 3.
+- [x] **Latency and reasoning** (`scripts/measure_latency.py`, real API, Haiku 5.5, 1 run each — small sample):
+
+  | Reasoning | #1 EN compare | #2 BN budgets | #3 BN quick add | Notes |
+  |---|---|---|---|---|
+  | default (unset) | first token 9.5s, total 13.0s | 7.8s / 12.0s | 4.3s / 4.8s | ~610 reasoning tokens on #1/#2 |
+  | `low` | 11.2s / 12.5s | 13.2s / 13.6s | 4.5s / 5.3s | no faster; ~25% cheaper |
+  | `none` | 2.1s / 7.7s | 1.3s / 9.7s | 2.1s / 7.2s | "first token" is filler ("I'll check…") before tool calls; **answered Bangla questions in English** |
+
+  Most of the wait is 2–3 tool rounds, each with hidden reasoning. **Recommendation: keep the default** (`ASSISTANT_REASONING_EFFORT` unset): `low` doesn't help Haiku, `none` hurts language-matching. The UI shows tool status lines ("Checking your spending…") during the wait. New setting `ASSISTANT_REASONING_EFFORT` (none|minimal|low|medium|high) is sent as OpenRouter `reasoning: {effort, exclude: true}` only when set; re-measure per model in A4.
+
 ## Phase A2 — Assistant frontend
 - [ ] `/assistant` page + floating button; streamed markdown (raw HTML off), stop, retry, status line
 - [ ] Suggested chips (EN/BN); conversation list, continue, delete, clear all
@@ -341,7 +358,8 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
 - [ ] Settings: opt-in toggle, data-sharing notice, delete chat history
 
 ## Phase A4 — Evaluation and E2E
-- [ ] `scripts/eval_assistant.py` (seeded demo user, 18 EN/BN/Banglish questions, numeric checks against SQL, `--models` comparison table: accuracy, latency, cost)
+- [ ] `scripts/eval_assistant.py` (seeded demo user, 18 EN/BN/Banglish questions, numeric checks against SQL, `--models` comparison table: accuracy, **time to first token, total time**, cost, reply language matches, no Bangla digits before the server fix-up)
+- [ ] Per model, compare reasoning effort default vs `low` vs `none` on the 3 example conversations (`scripts/measure_latency.py`) and record the chosen `ASSISTANT_REASONING_EFFORT`
 - [ ] Playwright: chips → message (mocked) → confirm quick-add → expense in list
 - [ ] You run the eval with your key; pick the final default model
 

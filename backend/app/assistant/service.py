@@ -233,6 +233,18 @@ class ToolCallFailed(Exception):
     pass
 
 
+_BANGLA_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+
+
+def english_digits(text: str) -> str:
+    """Amounts and dates always use 0-9, even in Bangla replies.
+
+    The prompt asks for this, but models still slip into ০-৯ (seen in real
+    Bangla answers), so the server enforces it on every streamed token.
+    """
+    return text.translate(_BANGLA_DIGITS)
+
+
 async def run_chat(
     llm: ChatModel, settings: Settings, user_id: UUID, conversation_id: Optional[UUID], user_text: str
 ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
@@ -270,9 +282,14 @@ async def run_chat(
                 session_id=str(convo_id),
             ):
                 if isinstance(event, TextDelta):
-                    round_text.append(event.text)
-                    text_parts.append(event.text)
-                    yield "token", {"text": event.text}
+                    piece = english_digits(event.text)
+                    if not round_text and "".join(text_parts).strip():
+                        # Text before a tool call ("Let me check…") and the answer after it
+                        # arrive in separate rounds; keep them as separate paragraphs
+                        piece = "\n\n" + piece.lstrip()
+                    round_text.append(piece)
+                    text_parts.append(piece)
+                    yield "token", {"text": piece}
                 elif isinstance(event, ToolCallsReady):
                     calls = event.calls
                 elif isinstance(event, Finished):
