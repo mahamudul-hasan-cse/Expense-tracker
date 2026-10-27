@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.pagination import PaginationInfo
 from app.schemas.types import Money, MoneyIn
@@ -29,8 +29,7 @@ class CategoryInfo(BaseModel):
     name: str
     icon: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BudgetResponse(BaseModel):
@@ -43,8 +42,7 @@ class BudgetResponse(BaseModel):
     percentage: float = 0  # Percentage of budget used
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BudgetListResponse(BaseModel):

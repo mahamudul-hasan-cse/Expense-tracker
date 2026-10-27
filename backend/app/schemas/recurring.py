@@ -2,7 +2,7 @@ from datetime import date
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.category import CategoryResponse
 from app.schemas.pagination import PaginationInfo
@@ -65,8 +65,7 @@ class RecurringExpenseResponse(BaseModel):
     last_paid_on: Optional[date]
     next_due: date
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RecurringExpenseListResponse(BaseModel):

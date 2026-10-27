@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.category import CategoryResponse
 from app.schemas.pagination import PaginationInfo
@@ -47,8 +47,7 @@ class IncomeResponse(BaseModel):
     income_date: date
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class IncomeListResponse(BaseModel):
