@@ -16,7 +16,19 @@ Status legend: `[x]` done and verified · `[~]` done but not fully verified (see
 2. ~~Auth approach~~: decided, self-built JWT; existing rows go to a first owner user.
 3. **Hosting** for backend + database (Phase 8).
 4. **License** (Phase 9) — suggested MIT.
-5. ~~Next.js 15.5 upgrade~~: approved as Phase N15, after the S0 smoke suite. Still open: where is the frontend hosted (Vercel or self-hosted)?
+5. ~~Next.js 15.5 upgrade~~: done (Phase N15). **Frontend host: Vercel** (decided 2026-10-27, see below).
+8. **Replacing the old `main` at deploy time**: recommendation in Phase 8 ("Switching main to production-ready"). **Needs your OK before anything touches `main`.**
+
+## GitHub and hosting facts (2026-10-27)
+
+- **Repository:** https://github.com/mahamudul-hasan-cse/Expense-tracker, **public**.
+  - `main` holds 1 commit (`640b6ad`, "Initial commit", 2026-01-20), the original code, and is unrelated to our local history.
+  - Our work is on the branch **`production-ready`**. It was pushed without force, and `main` is untouched.
+- **Secret scan of the public `main` commit:** gitleaks found nothing in all 83 files. A manual search for keys, tokens, `.env` files and DB URLs found only the local development defaults `wallet_user` / `wallet_pass` @ `localhost` (alembic.ini, config.py, the spec, docker-compose). Those are placeholders for a local Docker database, not real secrets. **They only need rotating if those exact credentials were ever used on a real, reachable database.** gitleaks across all 20+ local commits: no leaks.
+- **Frontend: Vercel**, deploying `main` to https://expense-tracker-orcin-pi.vercel.app. Every other branch (including `production-ready`) gets a **preview** deployment.
+  - **Preview builds need `BACKEND_URL`** (build time). Without it the `/api` rewrite points at `http://localhost:8000`, so previews load pages but every API call fails. This is harmless.
+  - If `NEXT_PUBLIC_API_URL` is set on the Vercel project, the browser calls that URL directly and bypasses the proxy. It must be **removed** for the new frontend (see "Deployment architecture" below).
+- **CI:** GitHub Actions runs on pushes and PRs to `main` and `production-ready`. The first real run (`a1ec24b`) passed all three jobs: Backend, Frontend, End-to-end.
 6. ~~AI assistant~~: design approved 2026-10-26 (decisions in `docs/ASSISTANT_DESIGN.md` §12).
 7. ~~Income and savings goals~~: approved, built before the assistant. Data model proposed under Phase F1 below.
 
@@ -347,11 +359,41 @@ Partially present: skeletons, toasts, delete confirmations, dark mode.
 - [ ] Sentry backend + frontend, enabled only when `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` is set
 - [ ] README section on UptimeRobot against `/health`
 
-## Phase 8 — Docker and deployment (ASK FIRST about hosting)
-- [ ] Backend multi-stage Dockerfile (uv, non-root); frontend Dockerfile (`output: 'standalone'` is already set)
-- [ ] docker-compose: Postgres + backend + frontend with healthchecks
+## Phase 8 — Docker and deployment (ASK FIRST about the backend/database host)
+**Frontend host: Vercel** (decided). Backend and database host: still to choose.
+- [ ] Backend multi-stage Dockerfile (uv, non-root). The frontend doesn't need one on Vercel; an optional one for self-hosting (`output: 'standalone'`).
+- [ ] docker-compose: Postgres + backend + frontend with healthchecks (local "everything" run)
 - [ ] Migrations on start (entrypoint)
-- [ ] Host-specific config + `docs/DEPLOYMENT.md` (after your choice)
+- [ ] Host-specific config + `docs/DEPLOYMENT.md` (after your choice of backend/database host)
+
+### Switching `main` to production-ready (at deploy time, with your OK)
+`main` (1 old commit) and `production-ready` have **unrelated histories**. GitHub can't open a PR between them ("entirely different commit histories").
+
+| Option | How | Verdict |
+|---|---|---|
+| **A. "ours" merge, then a normal PR (recommended)** | On `production-ready`: `git merge origin/main --allow-unrelated-histories -s ours -m "Adopt production-ready as main"`. This records the old commit as a parent but keeps **our tree exactly**. Push (no force), then open a PR `production-ready → main`; its diff is the full replacement. CI runs on the PR, and merging is a normal fast-forward or merge. | No force-push, no rewritten public history, the old commit stays in history, and it works with branch protection (PR + required checks) |
+| B. Merge with real conflict resolution | `--allow-unrelated-histories` without `-s ours`: nearly every file conflicts, and each one is resolved to our version by hand | Same result as A with far more work and risk of mistakes |
+| C. Replace `main` | Force-push `production-ready` to `main` | Rewrites public history, breaks clones and needs protection turned off. **Not recommended.** |
+
+**Deploy-day order** (the live Vercel site stays on the old code until the last step):
+1. Deploy the backend and run migrations (see the pre-deploy checklist), then smoke-test it directly (`/health`, register/login).
+2. Vercel → Project → Settings → Environment Variables:
+   - set **`BACKEND_URL`** = the backend's https URL, for Production *and* Preview
+   - **delete `NEXT_PUBLIC_API_URL`** if it exists
+   - check Root Directory = `frontend`
+3. Check a `production-ready` preview deployment against the real backend: login, add an expense, the assistant if enabled, and the refresh cookie (HttpOnly, Secure, Strict, Path `/api/v1/auth`).
+4. Option A above: `-s ours` merge commit on `production-ready` → PR to `main` → CI green → merge. Vercel deploys `main`.
+5. Smoke-test production. Rollback: Vercel → Deployments → previous deployment → "Instant Rollback". The backend stays compatible because the old frontend never used auth.
+
+### Client IPs and rate limits on Vercel
+- With Vercel as the proxy, the backend sees **Vercel's egress IPs**, which aren't fixed or published per project. So uvicorn's `--forwarded-allow-ips` can't safely trust a list of proxy IPs.
+- Vercel is documented to set `X-Forwarded-For` / `x-real-ip` / `x-vercel-forwarded-for` with the client IP for external rewrites. **That's unverified here.** Check it on the first preview with `backend/scripts/check_streaming.py`-style header echoing.
+- **Recommended:** a small Next.js middleware for `/api/*` that forwards the request with two added headers:
+  - `X-Client-IP`, from Vercel's client IP
+  - `X-Proxy-Secret`, a shared secret held only in Vercel and backend env vars
+
+  The backend uses `X-Client-IP` for rate limiting **only** when the secret matches, and otherwise falls back to the peer IP.
+- The **per-account failed-login limit** (Phase 3) stays as the backstop that doesn't depend on IPs.
 
 ## Phase 9 — Documentation
 - [ ] README rewrite (Mermaid architecture, env tables, tests, badge, screenshot list)
