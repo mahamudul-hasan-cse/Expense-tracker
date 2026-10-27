@@ -261,7 +261,7 @@ A test also asserts that guard 3 fires. CI never gets a real key.
 
 ## 13. Evaluation results
 
-*Pending: filled in after Phase A1–A3 by running `scripts/eval_assistant.py --models anthropic/claude-haiku-5.5,openai/gpt-6-luna,anthropic/claude-sonnet-5.5,google/gemini-3.5-flash-lite`.*
+*Done 2026-10-27: see `docs/ASSISTANT_EVAL.md`. Recommended: Haiku 5.5 with Gemini 3.5 Flash Lite as fallback (waiting for the owner's decision).*
 
 | Model | Numeric accuracy | Quick-add correct | Bangla / Banglish notes | Avg latency | Total cost |
 |---|---|---|---|---|---|

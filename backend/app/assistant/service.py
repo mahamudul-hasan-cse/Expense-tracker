@@ -239,7 +239,23 @@ def build_messages(
         {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
         {"type": "text", "text": context},
     ]
-    return [{"role": "system", "content": system_content}, *history, {"role": "user", "content": user_text}]
+    # Every model in the eval sometimes answered in the wrong script (English or Banglish
+    # questions in Bangla script, and the reverse) despite the prompt rule, so each turn
+    # says explicitly which script to reply in.
+    user_content = [
+        {"type": "text", "text": user_text},
+        {"type": "text", "text": REPLY_SCRIPT_NOTE[reply_language(user_text)]},
+    ]
+    return [{"role": "system", "content": system_content}, *history, {"role": "user", "content": user_content}]
+
+
+REPLY_SCRIPT_NOTE = {
+    "bn": "(App note: this message is in Bangla script. Reply in Bangla script, with English digits 0-9.)",
+    "en": (
+        "(App note: this message is written in Latin letters. Reply in Latin letters only: in English, "
+        "or in Banglish if the message is Banglish. Do not use Bangla script.)"
+    ),
+}
 
 
 _BANGLA_SCRIPT = re.compile("[ঀ-৿]")

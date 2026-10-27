@@ -193,8 +193,29 @@ def test_continuing_sends_recent_history(client, enabled, use_llm, monkeypatch):
     sent = fake.calls[-1]["messages"]
     # system + only the 2 most recent stored messages + the new question
     assert [m["role"] for m in sent] == ["system", "user", "assistant", "user"]
-    assert [m["content"] for m in sent[1:]] == ["q2", "a2", "q3"]
+    assert [m["content"] for m in sent[1:3]] == ["q2", "a2"]
+    assert sent[3]["content"][0]["text"] == "q3"
     assert "Asia/Dhaka" in json.dumps(sent[0]["content"])
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("How much did I spend?", "Reply in Latin letters only"),
+        ("ei mash e koto khoroch holo?", "Reply in Latin letters only"),
+        ("এই মাসে কত খরচ?", "Reply in Bangla script"),
+    ],
+)
+def test_each_turn_says_which_script_to_reply_in(client, enabled, use_llm, text, expected):
+    """Every model in the A4 eval sometimes replied in the wrong script without this."""
+    fake = use_llm(FakeLLM([[TextDelta("ok")]]))
+    sse(chat(client, enabled, text))
+    note = fake.calls[0]["messages"][-1]["content"][1]["text"]
+    assert expected in note
+    # The stored message is only what the user typed
+    convo = client.get(f"{API}/assistant/conversations", headers=enabled).json()["conversations"][0]
+    detail = client.get(f"{API}/assistant/conversations/{convo['id']}", headers=enabled).json()
+    assert detail["messages"][0]["content"] == text
 
 
 def test_tool_call_flow_uses_server_side_user(client, enabled, use_llm):

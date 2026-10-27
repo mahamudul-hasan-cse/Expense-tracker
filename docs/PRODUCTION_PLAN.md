@@ -384,10 +384,11 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
 - [x] Tests: backend (insight cached once a day, 4-lookup cap, opt-in, global budget, errors not cached, delete clears insights, edited confirm updates the card), Vitest (Edit → prefilled form → confirm with edits), Playwright (insight card, Settings switch hides it, delete history)
 
 ## Phase A4 — Evaluation and E2E
-- [ ] `scripts/eval_assistant.py` (seeded demo user, 18 EN/BN/Banglish questions, numeric checks against SQL, `--models` comparison table: accuracy, **time to first token, total time**, cost, reply language matches, no Bangla digits before the server fix-up)
-- [ ] Per model, compare reasoning effort default vs `low` vs `none` on the 3 example conversations (`scripts/measure_latency.py`) and record the chosen `ASSISTANT_REASONING_EFFORT`
-- [ ] Playwright: chips → message (mocked) → confirm quick-add → expense in list
-- [ ] You run the eval with your key; pick the final default model
+- [x] `scripts/eval_assistant.py`: 18 EN/BN/Banglish questions for the seeded demo user, automatic checks against ground truth from the DB (numbers, names, quick-add amount/category/date, declining investment advice, reply script); per model and reasoning setting: accuracy, script, raw Bangla digits, first status / first text / total time, rounds, cost per message. Scoring unit-tested (`tests/test_eval_checks.py`).
+- [x] 4-model eval, 2 rounds: **results, recommendation and limits in `docs/ASSISTANT_EVAL.md`**. Round 1 showed every model sometimes replying in the wrong script → fixed with a per-turn script note (regression test). Round 2: Haiku 18/18 (4.5s first text, $0.00056/message), Gemini Flash Lite 18/18, Sonnet 17/18 (19× cost), Luna 16/18.
+- [x] Reasoning: `low` not faster for Haiku; keep default.
+- [x] Playwright: chips → message (mocked) → quick-add confirm (mocked; the real confirm creating the expense is covered by backend tests, incl. 5 concurrent confirms → 1 expense)
+- [ ] **Owner decision:** final model + fallback (recommended: Haiku 5.5 + Gemini 3.5 Flash Lite), then set `ASSISTANT_MODEL` / `ASSISTANT_FALLBACK_MODELS`; final limits (recommended: keep 20/user/day and $1/day global; monthly credit limit on the production key)
 
 ## Phase 6 — UX polish
 Partially present: skeletons, toasts, delete confirmations, dark mode.
