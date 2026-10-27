@@ -5,6 +5,7 @@ import uuid
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.logging_config import request_id_var
+from app.monitoring import tag_request
 
 logger = logging.getLogger("app.requests")
 
@@ -24,6 +25,7 @@ class RequestLogMiddleware:
         incoming = dict(scope["headers"]).get(b"x-request-id", b"").decode("latin-1")
         request_id = incoming if 0 < len(incoming) <= 64 and incoming.isprintable() else uuid.uuid4().hex
         request_id_var.set(request_id)
+        tag_request(request_id)
 
         start = time.perf_counter()
         status_code = 500

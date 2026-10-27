@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     assistant_history_messages: int = 6
     assistant_timeout_seconds: float = 60.0
 
+    # Error monitoring (Sentry). Off unless SENTRY_DSN is set.
+    sentry_dsn: SecretStr = SecretStr("")
+    sentry_environment: str = ""  # defaults to APP_ENV
+    sentry_release: str = ""  # e.g. the git commit; set by the deploy platform
+    # Share of requests traced for performance (0 = errors only, which fits the free tier)
+    sentry_traces_sample_rate: float = Field(0.0, ge=0.0, le=1.0)
+
     @property
     def assistant_models(self) -> list[str]:
         """Main model first, then fallbacks, for OpenRouter's `models` routing."""
