@@ -136,7 +136,7 @@ export async function mockAssistant(page: Page, initial: Partial<MockState> = {}
     configured: true,
     enabled: true,
     messagesToday: 3,
-    dailyLimit: 20,
+    dailyLimit: 50,
     conversations: [],
     confirmCalls: 0,
     cancelCalls: 0,

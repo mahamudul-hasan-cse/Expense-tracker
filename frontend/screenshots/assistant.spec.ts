@@ -84,9 +84,9 @@ for (const scheme of ["light", "dark"] as const) {
 
     // Daily limit reached
     await page.unrouteAll();
-    await mockAssistant(page, { messagesToday: 20 });
+    await mockAssistant(page, { messagesToday: 50 });
     await page.goto("/assistant");
-    await expect(page.getByText("You've used all 20 assistant messages")).toBeVisible();
+    await expect(page.getByText("You've used all 50 assistant messages")).toBeVisible();
     await shot(page, "daily-limit", scheme);
   });
 }

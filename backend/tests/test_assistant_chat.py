@@ -20,6 +20,7 @@ from app.assistant.llm_client import (
     Usage,
 )
 from app.assistant.router import get_llm_client
+from app.assistant.service import trim_history
 from app.config import get_settings
 from app.database import SessionLocal
 from app.main import app
@@ -123,7 +124,7 @@ def test_off_by_default_until_user_opts_in(client, auth_headers, use_llm):
     assert (status["configured"], status["enabled"], status["reason"]) == (True, False, "disabled")
     assert chat(client, auth_headers, "hi").status_code == 403
     on = client.put(f"{API}/assistant/settings", json={"enabled": True}, headers=auth_headers).json()
-    assert (on["enabled"], on["available"], on["daily_limit"]) == (True, True, 20)
+    assert (on["enabled"], on["available"], on["daily_limit"]) == (True, True, 50)
 
 
 def test_daily_message_cap(client, enabled, use_llm, monkeypatch):
@@ -196,6 +197,35 @@ def test_continuing_sends_recent_history(client, enabled, use_llm, monkeypatch):
     assert [m["content"] for m in sent[1:3]] == ["q2", "a2"]
     assert sent[3]["content"][0]["text"] == "q3"
     assert "Asia/Dhaka" in json.dumps(sent[0]["content"])
+
+
+def test_history_resends_recent_turns_and_shortens_older_answers():
+    long_answer = "A" * 1000
+    trimmed = trim_history([("user", "q1"), ("assistant", long_answer), ("user", "q2"), ("assistant", "B" * 1000)])
+    assert trimmed[1]["content"].startswith("A" * 400) and trimmed[1]["content"].endswith("(earlier answer shortened)")
+    assert trimmed[3]["content"] == "B" * 1000  # the latest answer stays whole
+    assert [m["content"] for m in trimmed[::2]] == ["q1", "q2"]
+
+
+def test_default_history_window_is_three_exchanges():
+    assert get_settings().assistant_history_messages == 6
+
+
+def test_routing_key_is_per_user_and_hides_the_user_id(client, enabled, use_llm):
+    """One sticky key per user keeps requests on one provider's warm prompt cache."""
+    fake = use_llm(FakeLLM([[TextDelta("1")], [TextDelta("2")]]))
+    seen: list[Optional[str]] = []
+    original = fake.stream_chat
+
+    def spy(messages, tools, *, session_id=None, **kw):
+        seen.append(session_id)
+        return original(messages, tools, session_id=session_id, **kw)
+
+    fake.stream_chat = spy  # type: ignore[method-assign]
+    sse(chat(client, enabled, "one"))
+    sse(chat(client, enabled, "two"))  # a new conversation, same user
+    me = client.get(f"{API}/auth/me", headers=enabled).json()["id"]
+    assert seen[0] == seen[1] and len(seen[0]) == 32 and me not in seen[0]
 
 
 @pytest.mark.parametrize(

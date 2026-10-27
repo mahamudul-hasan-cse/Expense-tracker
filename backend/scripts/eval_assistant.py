@@ -25,7 +25,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Sequence
 
 from app.assistant import service
 from app.assistant.llm_client import Finished, LLMClient, TextDelta, ToolCallsReady
@@ -64,9 +64,14 @@ def ground_truth(user_id) -> dict[str, Any]:
         cashflow = tool("get_cashflow")
         goals = tool("get_savings_goals")
         recurring = tool("get_recurring_items", kind="expense")
+        all_recurring = tool("get_recurring_items", status="all")
+        categories = tool("list_categories")
 
     by_cat = {c["category"]: c["total"] for c in month["by_category"]}
+    data_names = [c["name"] for kind in ("expense_categories", "income_categories") for c in categories[kind]]
+    data_names += [i["name"] for i in all_recurring["items"]] + [g["name"] for g in goals["goals"]]
     return {
+        "data_names": sorted(set(data_names)),
         "today": today,
         "month_total": month["total"],
         "top3": [(c["category"], c["total"]) for c in month["by_category"][:3]],
@@ -192,7 +197,11 @@ QUESTIONS = [
 ]
 
 
-def language_ok(lang: str, text: str) -> bool:
+def language_ok(lang: str, text: str, data_names: Sequence[str] = ()) -> bool:
+    """Is the reply in the question's script? The user's own data names (categories, bills,
+    goals, often English like "House rent") are ignored: they're quoted as-is in any language."""
+    for name in sorted(data_names, key=len, reverse=True):
+        text = re.sub(re.escape(name), " ", text, flags=re.IGNORECASE)
     letters = [c for c in text if c.isalpha()]
     if not letters:
         return False
@@ -235,6 +244,10 @@ class Result:
     rounds: int
     tools: list[list[str]]
     cost: float
+    prompt_tokens: int
+    cached_tokens: int
+    output_tokens: int
+    max_request_output: int  # largest completion (incl. reasoning) of one LLM request
     error: Optional[str]
     answer: str = field(repr=False)
 
@@ -259,7 +272,7 @@ async def ask(settings, user_id, q: Question, truth: dict) -> Result:
             error = data.get("code")
     answer = "".join(parts)
     failures = ([f"error {error}"] if error else []) + q.check(answer, proposal, truth)
-    lang = language_ok(q.lang, answer)
+    lang = language_ok(q.lang, answer, truth["data_names"])
     if not lang:
         failures.append("wrong language")
     return Result(
@@ -275,6 +288,10 @@ async def ask(settings, user_id, q: Question, truth: dict) -> Result:
         rounds=len(rec.usages),
         tools=rec.tools,
         cost=float(sum((u.cost_usd for u in rec.usages), Decimal("0"))),
+        prompt_tokens=sum(u.prompt_tokens for u in rec.usages),
+        cached_tokens=sum(u.cached_tokens for u in rec.usages),
+        output_tokens=sum(u.completion_tokens for u in rec.usages),
+        max_request_output=max((u.completion_tokens for u in rec.usages), default=0),
         error=error,
         answer=answer,
     )
@@ -304,6 +321,10 @@ def summarize(model: str, effort: str, results: list[Result]) -> dict[str, Any]:
         "total": avg([r.total for r in results]),
         "rounds": avg([float(r.rounds) for r in results]),
         "cost_per_message": sum(r.cost for r in results) / n if n else 0.0,
+        "prompt_tokens": sum(r.prompt_tokens for r in results) / n if n else 0.0,
+        "output_tokens": sum(r.output_tokens for r in results) / n if n else 0.0,
+        "cache_hit": (sum(r.cached_tokens for r in results) / max(1, sum(r.prompt_tokens for r in results))),
+        "max_request_output": max((r.max_request_output for r in results), default=0),
         "errors": sum(r.error is not None for r in results),
     }
 
@@ -370,6 +391,13 @@ async def run(args: argparse.Namespace) -> None:
             f"| {s['model']} | {s['effort']} | {s['passed']}/{s['questions']} | {s['language_ok']}/{s['questions']} | "
             f"{s['raw_bangla_digits']}/{s['bn_questions']} | {fmt(s['first_status'])} | {fmt(s['first_text'])} | "
             f"{fmt(s['total'])} | {fmt(s['rounds'], '')} | ${s['cost_per_message']:.5f} | {s['errors']} |"
+        )
+    print("| Model | Reasoning | Prompt tok/msg | Cache hit | Output tok/msg | Largest single output |")
+    print("|---|---|---|---|---|---|")
+    for s in summaries:
+        print(
+            f"| {s['model']} | {s['effort']} | {s['prompt_tokens']:.0f} | {s['cache_hit'] * 100:.0f}% | "
+            f"{s['output_tokens']:.0f} | {s['max_request_output']} |"
         )
     print(f"TOTAL COST THIS RUN: ${spent:.6f}")
     if args.json:

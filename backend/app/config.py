@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Only usable outside production; production must set SECRET_KEY explicitly
 DEV_SECRET_KEY = "dev-insecure-secret-key-change-me-in-production"
 DEV_DATABASE_URL = "postgresql://wallet_user:wallet_pass@localhost:5432/wallet_agent"
-# Documented default (shortlist candidate A); ASSISTANT_MODEL overrides it
+# The eval winner (docs/ASSISTANT_EVAL.md); used when ASSISTANT_MODEL is set to empty
 DEFAULT_ASSISTANT_MODEL = "anthropic/claude-haiku-5.5"
 
 
@@ -49,16 +49,19 @@ class Settings(BaseSettings):
     # AI assistant (OpenRouter). Disabled when the key is empty; the app still runs.
     # SecretStr keeps the key out of reprs and logs.
     openrouter_api_key: SecretStr = SecretStr("")
-    # Empty = the documented default (DEFAULT_ASSISTANT_MODEL); production picks from the eval
-    assistant_model: str = ""
+    # Chosen from the eval (docs/ASSISTANT_EVAL.md); empty also means DEFAULT_ASSISTANT_MODEL
+    assistant_model: str = "anthropic/claude-haiku-5.5"
     assistant_fallback_models: str = ""  # comma-separated
     assistant_app_url: str = "http://localhost:3000"
     assistant_app_name: str = "Wallet Agent"
     assistant_require_zdr: bool = True
-    assistant_daily_message_limit: int = 20
+    assistant_daily_message_limit: int = 50
     assistant_global_daily_budget_usd: float = 1.0
-    # Includes hidden reasoning tokens (Haiku 5.5 used ~150-460 of them per answer in testing)
-    assistant_max_output_tokens: int = 1600
+    # Per LLM request, including hidden reasoning tokens. With the concise-answer prompt the
+    # largest single request in the 18-question eval used 796-1,137 (Bangla budget answers,
+    # mostly reasoning); 800 once cut answers short, so keep ~30% headroom. Cost comes from
+    # what's actually generated; an answer that still hits the cap gets a "cut short" note.
+    assistant_max_output_tokens: int = 1500
     # OpenRouter `reasoning.effort` (none|minimal|low|medium|high); empty = the model's default.
     # Set from the A4 latency measurement; reasoning text is never sent back to the app.
     assistant_reasoning_effort: Literal["", "none", "minimal", "low", "medium", "high"] = ""
@@ -67,7 +70,8 @@ class Settings(BaseSettings):
     # require_parameters) no Haiku 5.5 endpoint accepts the explicit flag (all requests fail).
     assistant_parallel_tool_calls: bool = False
     assistant_max_tool_calls: int = 8
-    assistant_history_messages: int = 20
+    # Previous messages resent with each question (3 exchanges); older answers are trimmed
+    assistant_history_messages: int = 6
     assistant_timeout_seconds: float = 60.0
 
     @property

@@ -95,7 +95,7 @@ All four are usable under ZDR, so **none are excluded**. B relies on a single pr
 - Until you approve a model, `ASSISTANT_MODEL` stays **unset** in your `backend/.env`. Code has one documented default (candidate A), used only for local development.
 
 **Estimated cost:** a typical message is about 15k input tokens (system prompt + tools + history + 2–3 tool round trips) and about 500 output tokens.
-- Haiku: about **$0.002 per message**, so a user at the 20-message cap costs about $0.04/day, and the $1/day global cap covers about 500 messages/day.
+- Haiku (measured in A4, after the cost work): about **$0.00043 per message**, so a user at the 50-message cap costs about $0.02/day, and the $1/day global cap covers about 2,300 messages/day.
 - Sonnet: about $0.04 per message.
 
 ## 4. Tools (read-only, `backend/app/assistant/tools.py`)
@@ -194,10 +194,10 @@ ASSISTANT_FALLBACK_MODELS=openai/gpt-6-luna
 ASSISTANT_APP_URL=http://localhost:3000
 ASSISTANT_APP_NAME=Wallet Agent
 ASSISTANT_REQUIRE_ZDR=true
-ASSISTANT_DAILY_MESSAGE_LIMIT=20
+ASSISTANT_DAILY_MESSAGE_LIMIT=50
 ASSISTANT_MAX_OUTPUT_TOKENS=1600   # raised from 800: reasoning tokens count toward it
 ASSISTANT_MAX_TOOL_CALLS=8
-ASSISTANT_HISTORY_MESSAGES=20
+ASSISTANT_HISTORY_MESSAGES=6
 ASSISTANT_TIMEOUT_SECONDS=60
 ASSISTANT_GLOBAL_DAILY_BUDGET_USD=1
 ```
@@ -255,7 +255,7 @@ A test also asserts that guard 3 fires. CI never gets a real key.
 3. **Shortlist:** A, B, C, plus **D** `google/gemini-3.5-flash-lite`. Real-call spend stays under $2, with a running total reported.
 4. **Opt-in:** off by default. There's a "Turn on assistant" card on the chat page and a toggle in Settings.
 5. **ZDR only by default.** All four candidates qualify (§3).
-6. **Limits:** `ASSISTANT_GLOBAL_DAILY_BUDGET_USD=1` and `ASSISTANT_DAILY_MESSAGE_LIMIT=20`, both env-configurable. After the eval I'll report the cost per message for the recommended model and suggest final limits.
+6. **Limits:** `ASSISTANT_GLOBAL_DAILY_BUDGET_USD=1` and `ASSISTANT_DAILY_MESSAGE_LIMIT=50` (raised from 20 on 2026-10-27), both env-configurable. Measured cost per message: `docs/ASSISTANT_EVAL.md`.
 7. **Production:** a separate production OpenRouter key with its own limit (added to the pre-deploy checklist).
 8. **If B (`openai/gpt-6-luna`) wins the eval:** it has a single ZDR provider (Azure), so it ships **with a fallback** in `ASSISTANT_FALLBACK_MODELS`: the best-scoring of A or D that has a different ZDR provider.
 

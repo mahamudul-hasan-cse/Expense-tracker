@@ -40,6 +40,20 @@ def test_language_detection():
     assert not language_ok("en", "এই মাসে খরচ")
 
 
+def test_language_check_ignores_the_users_own_data_names():
+    """A real Bangla answer that failed the plain letter count because bill names are English."""
+    answer = (
+        "আপনার সামনের বিলগুলো:\n- **28 অক্টোবর:** GP internet pack, ৳499 (Mobile Recharge)\n"
+        "- **1 নভেম্বর:** House rent, ৳15,000 (Rent)\n- **10 নভেম্বর:** Link3 wifi, ৳1,000 (Wifi Bill)\n"
+        "মাসে মোট নিয়মিত খরচ ৳16,499।"
+    )
+    names = ["GP internet pack", "House rent", "Link3 wifi", "Mobile Recharge", "Rent", "Wifi Bill"]
+    assert not language_ok("bn", answer)
+    assert language_ok("bn", answer, names)
+    # An English answer stays wrong even with the names removed
+    assert not language_ok("bn", "Your next bills: GP internet pack ৳499 and House rent ৳15,000.", names)
+
+
 def test_quick_add_proposal_check():
     check = proposes(1200, "Groceries", 1)
     good = {"amount": 1200, "category_name": "Groceries", "expense_date": "2026-10-26"}

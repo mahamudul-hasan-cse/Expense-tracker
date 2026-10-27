@@ -1,6 +1,7 @@
 """Assistant orchestration: availability checks, the tool-calling loop, persistence and usage."""
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -113,6 +114,24 @@ def check_availability(db: Session, user: User, settings: Settings, configured: 
 # --- Persistence helpers (sync; run in a thread) ------------------------------------------
 
 
+OLD_REPLY_CHARS = 400
+
+
+def trim_history(messages: list[tuple[str, str]]) -> list[dict[str, str]]:
+    """Recent turns to resend, cheaply: older assistant answers are cut to their opening lines.
+
+    The latest answer is kept whole (follow-ups usually refer to it). Tool calls and
+    tool results are never stored, so they're never resent; the model looks figures up again.
+    """
+    last_reply = max((i for i, (role, _) in enumerate(messages) if role == "assistant"), default=-1)
+    trimmed = []
+    for i, (role, content) in enumerate(messages):
+        if role == "assistant" and i != last_reply and len(content) > OLD_REPLY_CHARS:
+            content = content[:OLD_REPLY_CHARS].rstrip() + " …(earlier answer shortened)"
+        trimmed.append({"role": role, "content": content})
+    return trimmed
+
+
 @dataclass
 class Turn:
     conversation_id: UUID
@@ -146,7 +165,7 @@ def _prepare_turn(user_id: UUID, conversation_id: Optional[UUID], text: str, his
             .limit(history_limit)
             .all()
         )
-        history = [{"role": m.role, "content": m.content} for m in reversed(previous) if m.content.strip()]
+        history = trim_history([(m.role, m.content) for m in reversed(previous) if m.content.strip()])
 
         db.add(AssistantMessage(conversation_id=convo.id, user_id=user_id, role="user", content=text, status="ok"))
         convo.updated_at = func.now()
@@ -270,6 +289,21 @@ class ToolCallFailed(Exception):
     pass
 
 
+def routing_key(user_id: UUID) -> str:
+    """OpenRouter session id for sticky routing: one per user, not per conversation.
+
+    Each provider endpoint has its own prompt cache; per-conversation keys sent every new
+    chat to a random endpoint with a cold cache (measured: about half the requests missed).
+    Hashed, so OpenRouter never sees our user id.
+    """
+    return hashlib.sha256(f"wallet-agent:{user_id}".encode()).hexdigest()[:32]
+
+
+def tool_json(result: dict[str, Any]) -> str:
+    """Tool results as compact JSON (no spaces after separators): fewer uncached input tokens."""
+    return json.dumps(result, default=str, ensure_ascii=False, separators=(",", ":"))
+
+
 _BANGLA_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
 
 
@@ -318,7 +352,7 @@ async def run_chat(
                 tools,
                 max_tokens=settings.assistant_max_output_tokens,
                 allow_tools=allow_tools,
-                session_id=str(convo_id),
+                session_id=routing_key(user_id),
             ):
                 if isinstance(event, TextDelta):
                     piece = english_digits(event.text)
@@ -378,7 +412,7 @@ async def run_chat(
                     {
                         "role": "tool",
                         "tool_call_id": call.id,
-                        "content": json.dumps(result, default=str, ensure_ascii=False),
+                        "content": tool_json(result),
                     }
                 )
     except LLMError as exc:
@@ -438,7 +472,13 @@ async def generate_weekly_insight(llm: ChatModel, settings: Settings, user_id: U
         allow_tools = tool_calls < INSIGHT_MAX_TOOL_CALLS
         calls = []
         round_text: list[str] = []
-        async for event in llm.stream_chat(messages, tools, max_tokens=INSIGHT_MAX_TOKENS, allow_tools=allow_tools):
+        async for event in llm.stream_chat(
+            messages,
+            tools,
+            max_tokens=INSIGHT_MAX_TOKENS,
+            allow_tools=allow_tools,
+            session_id=routing_key(user_id),
+        ):
             if isinstance(event, TextDelta):
                 round_text.append(english_digits(event.text))
             elif isinstance(event, ToolCallsReady):
@@ -468,7 +508,7 @@ async def generate_weekly_insight(llm: ChatModel, settings: Settings, user_id: U
                 {
                     "role": "tool",
                     "tool_call_id": call.id,
-                    "content": json.dumps(result, default=str, ensure_ascii=False),
+                    "content": tool_json(result),
                 }
             )
     return "".join(text_parts).strip()

@@ -320,7 +320,7 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
   - "answer cut short" note when the model hits the length limit
   - history: status, opt-in toggle, conversations list/get/delete/clear-all, proposal confirm/cancel
 - [x] Limits:
-  - per-user daily cap (20) and global daily USD budget ($1), both by Asia/Dhaka day
+  - per-user daily cap (20, raised to 50 on 2026-10-27) and global daily USD budget ($1), both by Asia/Dhaka day
   - max output tokens 1600, raised from 800 after real testing: Haiku's hidden reasoning used up to 464 tokens and cut answers short
 - [x] Disabled mode without a key; `uv run python -m app.cli assistant-usage --days N`
 - [x] Tests with a fake LLM (no network), 15 `LLMClient` parsing/error tests with a fake SDK stream, and tool tests against Postgres including isolation
@@ -379,7 +379,7 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
 
 ## Phase A3 — Quick add, weekly insight, settings
 - [x] `propose_expense` → confirmation card → server confirm (idempotent, same validation as `POST /expenses`); **Edit** opens the regular expense form prefilled and saves the edits through the same confirm; the card then shows what was actually saved (the server stores the final values on the message); status saved
-- [x] Weekly insight card on the dashboard: `GET /assistant/insights/weekly`, at most once per Asia/Dhaka day per user, cached in `assistant_insights`; read-only tools (no quick add), at most 4 lookups; counts toward the global budget, not the user's 20 messages; provider errors aren't cached; the client never retries automatically. Only shown when the assistant is on. **Real check (demo data): 1 lookup round, 6.4s, $0.0013.**
+- [x] Weekly insight card on the dashboard: `GET /assistant/insights/weekly`, at most once per Asia/Dhaka day per user, cached in `assistant_insights`; read-only tools (no quick add), at most 4 lookups; counts toward the global budget, not the user's daily messages; provider errors aren't cached; the client never retries automatically. Only shown when the assistant is on. **Real check (demo data): 1 lookup round, 6.4s, $0.0013.**
 - [x] Settings → "AI Assistant": on/off switch, plain-language data notice, "Delete my chat history" (with confirmation; also clears saved insights; expenses stay)
 - [x] Tests: backend (insight cached once a day, 4-lookup cap, opt-in, global budget, errors not cached, delete clears insights, edited confirm updates the card), Vitest (Edit → prefilled form → confirm with edits), Playwright (insight card, Settings switch hides it, delete history)
 
@@ -388,7 +388,7 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
 - [x] 4-model eval, 2 rounds: **results, recommendation and limits in `docs/ASSISTANT_EVAL.md`**. Round 1 showed every model sometimes replying in the wrong script → fixed with a per-turn script note (regression test). Round 2: Haiku 18/18 (4.5s first text, $0.00056/message), Gemini Flash Lite 18/18, Sonnet 17/18 (19× cost), Luna 16/18.
 - [x] Reasoning: `low` not faster for Haiku; keep default.
 - [x] Playwright: chips → message (mocked) → quick-add confirm (mocked; the real confirm creating the expense is covered by backend tests, incl. 5 concurrent confirms → 1 expense)
-- [ ] **Owner decision:** final model + fallback (recommended: Haiku 5.5 + Gemini 3.5 Flash Lite), then set `ASSISTANT_MODEL` / `ASSISTANT_FALLBACK_MODELS`; final limits (recommended: keep 20/user/day and $1/day global; monthly credit limit on the production key)
+- [x] **Owner decisions (2026-10-27):** per-user limit 50/day; cheaper messages (−41% per message at 18/18: concise answers, compact tool JSON, per-user sticky routing for cache hits 71% → 87%, 6-message history, max output 1,500); Haiku 5.5 vs Qwen 3.8 27B → **Haiku stays** (`ASSISTANT_MODEL` set). Details in `docs/ASSISTANT_EVAL.md`.
 
 ## Phase 6 — UX polish
 Partially present: skeletons, toasts, delete confirmations, dark mode.

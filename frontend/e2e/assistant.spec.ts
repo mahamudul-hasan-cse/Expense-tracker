@@ -40,7 +40,7 @@ test("opt in, ask with a chip, get a formatted answer", async ({ page }) => {
     log.locator("li", { hasText: "September: ৳41,715 across 90 expenses" })
   ).toBeVisible();
   await expect(log).not.toContainText("**");
-  await expect(chat(page).getByText("16 of 20 left today").first()).toBeAttached();
+  await expect(chat(page).getByText("46 of 50 left today").first()).toBeAttached();
   // It shows up in the history list
   await expect(
     page.getByRole("complementary", { name: "Chat history" }).getByText("How much did I spend")
@@ -67,11 +67,11 @@ test("quick add: one save even on a double click, then a clear saved state", asy
 });
 
 test("the daily limit replaces the message box with an explanation", async ({ page }) => {
-  await mockAssistant(page, { messagesToday: 20 });
+  await mockAssistant(page, { messagesToday: 50 });
   await signUp(page);
   await page.goto("/assistant");
   await expect(chat(page).getByRole("status")).toContainText(
-    "You've used all 20 assistant messages for today"
+    "You've used all 50 assistant messages for today"
   );
   await expect(input(page)).toHaveCount(0);
 });
