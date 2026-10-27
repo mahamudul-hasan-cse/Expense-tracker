@@ -6,7 +6,8 @@ const TONES: Record<GoalTone, string> = {
   success: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   warning: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   danger: "bg-destructive/10 text-destructive",
-  neutral: "bg-muted text-muted-foreground",
+  // muted-foreground on bg-muted is 4.4:1, just under WCAG AA for small text
+  neutral: "bg-muted text-foreground/75",
 };
 
 export function GoalStatusBadge({ goal }: { goal: Pick<Goal, "state" | "remaining"> }) {

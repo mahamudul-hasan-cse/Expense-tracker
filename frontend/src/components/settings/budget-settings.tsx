@@ -30,7 +30,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
-import { formatCurrency } from "@/lib/utils";
+import { budgetLevel, formatCurrency, formatPercent } from "@/lib/utils";
+import { amountError } from "@/lib/validation";
+import { LEVEL_BAR, LEVEL_TEXT } from "@/components/shared/budget-levels";
+import { FieldError } from "@/components/ui/field-error";
 import { Budget } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit2, Trash2, Target } from "lucide-react";
@@ -55,6 +58,10 @@ export function BudgetSettings() {
   const [budgetAmount, setBudgetAmount] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingBudget, setDeletingBudget] = useState<Budget | null>(null);
+  const [formErrors, setFormErrors] = useState<{
+    category: string | null;
+    amount: string | null;
+  }>({ category: null, amount: null });
 
   // React Query hooks
   const { data: budgetsData, isLoading: budgetsLoading } = useBudgets(selectedMonth, selectedYear);
@@ -98,14 +105,17 @@ export function BudgetSettings() {
       setBudgetCategoryId("");
       setBudgetAmount("");
     }
+    setFormErrors({ category: null, amount: null });
     setDialogOpen(true);
   };
 
   const handleSave = () => {
-    if (!budgetAmount || parseFloat(budgetAmount) <= 0) {
-      toast({ title: "Error", description: "Please enter a valid amount", variant: "destructive" });
-      return;
-    }
+    const errors = {
+      category: !editingBudget && !budgetCategoryId ? "Choose a category" : null,
+      amount: amountError(budgetAmount),
+    };
+    setFormErrors(errors);
+    if (errors.category || errors.amount) return;
 
     if (editingBudget) {
       updateBudgetMutation.mutate(
@@ -125,10 +135,6 @@ export function BudgetSettings() {
         }
       );
     } else {
-      if (!budgetCategoryId) {
-        toast({ title: "Error", description: "Please select a category", variant: "destructive" });
-        return;
-      }
       createBudgetMutation.mutate(
         {
           category_id: budgetCategoryId,
@@ -169,7 +175,7 @@ export function BudgetSettings() {
 
   return (
     <>
-      <Card>
+      <Card id="budgets" className="scroll-mt-20">
         {/* Title above the controls on phones; one row from sm up */}
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
@@ -225,21 +231,16 @@ export function BudgetSettings() {
             <div className="space-y-4">
               {budgets.map((budget) => (
                 <div key={budget.id} className="space-y-2 rounded-lg border p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">{budget.category.icon}</span>
-                      <span className="font-medium">{budget.category.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={
-                          budget.percentage > 100
-                            ? "text-destructive font-semibold"
-                            : "text-muted-foreground"
-                        }
-                      >
-                        {formatCurrency(budget.spent)} / {formatCurrency(budget.amount)}
+                  {/* Name and actions on one line; amounts get their own line so they never
+                      collide with the name on phones */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="text-xl" aria-hidden>
+                        {budget.category.icon}
                       </span>
+                      <span className="truncate font-medium">{budget.category.name}</span>
+                    </div>
+                    <div className="flex shrink-0 items-center">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -263,17 +264,19 @@ export function BudgetSettings() {
                   </div>
                   <Progress
                     value={Math.min(budget.percentage, 100)}
-                    className={
-                      budget.percentage > 90
-                        ? "[&>div]:bg-destructive"
-                        : budget.percentage > 75
-                          ? "[&>div]:bg-yellow-500"
-                          : ""
-                    }
+                    className={LEVEL_BAR[budgetLevel(budget.percentage)]}
+                    aria-label={`${budget.category.name}, ${formatPercent(budget.percentage)} used`}
                   />
-                  <p className="text-xs text-muted-foreground text-right">
-                    {budget.percentage.toFixed(1)}% used
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 text-sm">
+                    <span
+                      className={`whitespace-nowrap ${LEVEL_TEXT[budgetLevel(budget.percentage)]}`}
+                    >
+                      {formatCurrency(budget.spent)} / {formatCurrency(budget.amount)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatPercent(budget.percentage)} used
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -296,7 +299,11 @@ export function BudgetSettings() {
               <div className="space-y-2">
                 <Label htmlFor="budget-category">Category</Label>
                 <Select value={budgetCategoryId} onValueChange={setBudgetCategoryId}>
-                  <SelectTrigger id="budget-category">
+                  <SelectTrigger
+                    id="budget-category"
+                    aria-invalid={!!formErrors.category}
+                    aria-describedby="budget-category-error"
+                  >
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -310,6 +317,7 @@ export function BudgetSettings() {
                     ))}
                   </SelectContent>
                 </Select>
+                <FieldError id="budget-category-error" message={formErrors.category} />
               </div>
             )}
             {editingBudget && (
@@ -328,7 +336,10 @@ export function BudgetSettings() {
                 onChange={(e) => setBudgetAmount(e.target.value)}
                 min="0"
                 step="0.01"
+                aria-invalid={!!formErrors.amount}
+                aria-describedby="budget-amount-error"
               />
+              <FieldError id="budget-amount-error" message={formErrors.amount} />
             </div>
           </div>
           <DialogFooter>

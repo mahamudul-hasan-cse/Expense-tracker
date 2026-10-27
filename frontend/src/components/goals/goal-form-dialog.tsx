@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldError } from "@/components/ui/field-error";
+import { amountError } from "@/lib/validation";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateGoal, useUpdateGoal } from "@/lib/queries";
 import { formatDateForInput } from "@/lib/utils";
@@ -40,7 +42,11 @@ export function GoalFormDialog({
   const [icon, setIcon] = useState("");
   const [target, setTarget] = useState("");
   const [deadline, setDeadline] = useState("");
+  // Server/unexpected errors at the top; field problems under each field
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<
+    Record<"name" | "target" | "deadline", string | null>
+  >({ name: null, target: null, deadline: null });
 
   useEffect(() => {
     setName(goal?.name ?? "");
@@ -48,17 +54,23 @@ export function GoalFormDialog({
     setTarget(goal ? String(goal.target_amount) : "");
     setDeadline(goal?.target_date ?? "");
     setError(null);
+    setFieldErrors({ name: null, target: null, deadline: null });
   }, [goal, open]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const errors = {
+      name: name.trim() ? null : "Give the goal a name",
+      target: amountError(target),
+      // An unchanged past deadline on an existing goal is fine; new ones must be in the future
+      deadline:
+        deadline && deadline < tomorrowISO() && deadline !== goal?.target_date
+          ? "The deadline must be in the future"
+          : null,
+    };
+    setFieldErrors(errors);
+    if (errors.name || errors.target || errors.deadline) return;
     const amount = parseFloat(target);
-    if (!name.trim()) return setError("Give the goal a name");
-    if (!(amount > 0)) return setError("Target amount must be more than ৳0");
-    // An unchanged past deadline on an existing goal is fine; new deadlines must be in the future
-    if (deadline && deadline < tomorrowISO() && deadline !== goal?.target_date) {
-      return setError("Deadline must be in the future");
-    }
     setError(null);
     try {
       if (goal) {
@@ -99,27 +111,32 @@ export function GoalFormDialog({
               {error}
             </p>
           )}
-          <div className="flex gap-2">
-            <div className="w-20 space-y-2">
-              <Label htmlFor="goal-icon">Icon</Label>
-              <Input
-                id="goal-icon"
-                value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-                placeholder="💻"
-                maxLength={50}
-              />
-            </div>
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="goal-name">Name *</Label>
-              <Input
-                id="goal-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., New laptop"
-                maxLength={100}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="goal-name">Name *</Label>
+            <Input
+              id="goal-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., New laptop"
+              maxLength={100}
+              aria-invalid={!!fieldErrors.name}
+              aria-describedby="goal-name-error"
+            />
+            <FieldError id="goal-name-error" message={fieldErrors.name} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="goal-icon">Icon (optional)</Label>
+            <Input
+              id="goal-icon"
+              value={icon}
+              onChange={(e) => setIcon(e.target.value)}
+              maxLength={50}
+              className="w-24"
+              aria-describedby="goal-icon-hint"
+            />
+            <p id="goal-icon-hint" className="text-xs text-muted-foreground">
+              An emoji, e.g. a laptop or a plane. Leave empty for 🎯.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="goal-target">Target amount (৳) *</Label>
@@ -131,7 +148,10 @@ export function GoalFormDialog({
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder="0.00"
+              aria-invalid={!!fieldErrors.target}
+              aria-describedby="goal-target-error"
             />
+            <FieldError id="goal-target-error" message={fieldErrors.target} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="goal-deadline">Deadline (optional)</Label>
@@ -142,6 +162,8 @@ export function GoalFormDialog({
                 min={tomorrowISO()}
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
+                aria-invalid={!!fieldErrors.deadline}
+                aria-describedby="goal-deadline-error goal-deadline-hint"
               />
               {deadline && (
                 <Button type="button" variant="ghost" onClick={() => setDeadline("")}>
@@ -149,7 +171,8 @@ export function GoalFormDialog({
                 </Button>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <FieldError id="goal-deadline-error" message={fieldErrors.deadline} />
+            <p id="goal-deadline-hint" className="text-xs text-muted-foreground">
               With a deadline you&apos;ll see how much to save each month.
             </p>
           </div>

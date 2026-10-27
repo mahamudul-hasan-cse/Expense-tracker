@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
@@ -9,8 +9,18 @@ import { ThemeProvider } from "@/lib/theme-provider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Wallet Agent",
-  description: "A simple expense tracking app",
+  title: { default: "Wallet Agent", template: "%s · Wallet Agent" },
+  description: "Track expenses, income, budgets and savings goals in Taka.",
+  applicationName: "Wallet Agent",
+  appleWebApp: { capable: true, title: "Wallet Agent", statusBarStyle: "default" },
+  icons: { apple: "/apple-touch-icon.png" },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#7c3aed" },
+    { media: "(prefers-color-scheme: dark)", color: "#030712" },
+  ],
 };
 
 export default function RootLayout({

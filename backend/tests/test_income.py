@@ -29,6 +29,11 @@ def add_income(client, headers, amount, category_id, when=None, note=None):
 # --- Income categories -------------------------------------------------------
 
 
+def test_other_income_category_icon_is_not_a_plus_sign(client, auth_headers):
+    """➕ looked like an "add" button in the dashboard's Upcoming list."""
+    assert income_categories(client, auth_headers)["Other"]["icon"] == "💰"
+
+
 def test_defaults_seeded_on_registration(client, auth_headers):
     cats = income_categories(client, auth_headers)
     assert set(cats) == {"Salary", "Freelance", "Business", "Gift", "Other"}

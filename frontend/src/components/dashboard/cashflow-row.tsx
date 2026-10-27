@@ -35,7 +35,7 @@ export function CashflowRow() {
       <CardContent>
         <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <Stat
-            icon={<ArrowDownCircle className="h-4 w-4 text-emerald-600" aria-hidden="true" />}
+            icon={<ArrowDownCircle className="h-4 w-4 text-emerald-700" aria-hidden="true" />}
             label="Income"
             value={formatCurrency(data.income)}
           />

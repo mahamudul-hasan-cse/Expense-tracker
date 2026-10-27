@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Wallet Agent - Simple Expense Tracking",
+  title: { absolute: "Wallet Agent: expense tracker for Bangladesh" },
   description:
-    "A clean, fast expense tracker with beautiful charts, budget goals, and recurring reminders. No signup required.",
+    "Track expenses and income in Taka, set monthly budgets and savings goals, and get bill reminders. Free and open source.",
 };
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {

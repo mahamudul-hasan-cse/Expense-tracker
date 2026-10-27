@@ -8,7 +8,8 @@ const nextConfig = {
   output: "standalone",
   // E2E runs build into their own folder so they don't clobber a running `next dev`
   distDir: process.env.NEXT_DIST_DIR || ".next",
-  // No next/image usage: disable the Image Optimization API (several Next 14 advisories target it)
+  // Image Optimization API off (several advisories have targeted it); the only images are
+  // pre-sized WebP files in public/, served as-is
   images: { unoptimized: true },
   async rewrites() {
     return [

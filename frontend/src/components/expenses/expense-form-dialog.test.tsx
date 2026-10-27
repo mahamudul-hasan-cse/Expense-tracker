@@ -41,17 +41,25 @@ beforeEach(() => {
 });
 
 describe("ExpenseFormDialog", () => {
-  it("requires a category before saving", async () => {
+  it("shows a missing category next to the field and keeps the amount", async () => {
     const { user } = renderDialog();
     await user.type(screen.getByLabelText(/Amount/), "80");
     await user.click(screen.getByRole("button", { name: "Save Expense" }));
     expect(createExpense).not.toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variant: "destructive",
-        description: "Amount and category are required",
-      })
-    );
+    expect(screen.getByText("Choose a category")).toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/Amount/)).toHaveValue(80);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("checks the amount with the backend's rules before sending", async () => {
+    const { user } = renderDialog({ preselectedCategory: categories[0] });
+    await user.click(screen.getByRole("button", { name: "Save Expense" }));
+    expect(screen.getByText("Enter an amount")).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Amount/), "12.345");
+    await user.click(screen.getByRole("button", { name: "Save Expense" }));
+    expect(screen.getByText("Use at most 2 decimal places")).toBeInTheDocument();
+    expect(createExpense).not.toHaveBeenCalled();
   });
 
   it("creates an expense with the preselected category and today's Dhaka date", async () => {

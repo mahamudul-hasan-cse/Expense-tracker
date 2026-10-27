@@ -48,14 +48,28 @@ import {
 } from "@/lib/queries";
 import { AssistantSettings } from "./assistant-settings";
 import { BudgetSettings } from "./budget-settings";
+import { ErrorState } from "@/components/shared/error-state";
+import { PageHeader } from "@/components/shared/page-header";
+import { FieldError } from "@/components/ui/field-error";
+import { amountError, requiredError } from "@/lib/validation";
 import { IncomeCategories } from "./income-categories";
 
 export function Settings() {
   const { toast } = useToast();
 
   // React Query hooks
-  const { data: categoriesData, isLoading: categoriesLoading } = useCategories();
-  const { data: recurringData, isLoading: recurringLoading } = useRecurring();
+  const {
+    data: categoriesData,
+    isLoading: categoriesLoading,
+    isError: categoriesError,
+    refetch: refetchCategories,
+  } = useCategories();
+  const {
+    data: recurringData,
+    isLoading: recurringLoading,
+    isError: recurringError,
+    refetch: refetchRecurring,
+  } = useRecurring();
   const { data: incomeCategoriesData } = useIncomeCategories();
   const incomeCategories = incomeCategoriesData?.income_categories ?? [];
   const createCategoryMutation = useCreateCategory();
@@ -96,6 +110,24 @@ export function Settings() {
   const [exportStartDate, setExportStartDate] = useState("");
   const [exportEndDate, setExportEndDate] = useState("");
 
+  // Inline form errors, keyed by field id
+  const [errors, setErrors] = useState<Record<string, string | null>>({});
+
+  if (categoriesError || recurringError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Settings" description="Budgets, categories, recurring items and more" />
+        <ErrorState
+          message="Couldn't load your settings."
+          onRetry={() => {
+            refetchCategories();
+            refetchRecurring();
+          }}
+        />
+      </div>
+    );
+  }
+
   if (loading) {
     return <SettingsSkeleton />;
   }
@@ -105,15 +137,14 @@ export function Settings() {
     setEditingCategory(category ?? null);
     setCategoryName(category?.name ?? "");
     setCategoryIcon(category?.icon ?? "");
+    setErrors({});
     setCategoryDialogOpen(true);
   };
 
   const handleSaveCategory = () => {
     const name = categoryName.trim();
-    if (!name) {
-      toast({ title: "Error", description: "Category name is required", variant: "destructive" });
-      return;
-    }
+    setErrors({ "category-name": requiredError(name, "Name") });
+    if (!name) return;
     const onSuccess = (message: string) => {
       toast({ title: "Success", description: message });
       setCategoryDialogOpen(false);
@@ -195,24 +226,26 @@ export function Settings() {
       setRecurringFrequency("monthly");
       setRecurringDueDay("");
     }
+    setErrors({});
     setRecurringDialogOpen(true);
   };
 
   const handleSaveRecurring = () => {
-    if (!recurringName || !recurringAmount || !recurringCategoryId || !recurringDueDay) {
-      toast({ title: "Error", description: "All fields are required", variant: "destructive" });
-      return;
-    }
     const dueDay = parseInt(recurringDueDay);
     const maxDueDay = recurringFrequency === "weekly" ? 7 : 31;
-    if (!(dueDay >= 1 && dueDay <= maxDueDay)) {
-      toast({
-        title: "Error",
-        description: `Due day must be 1-${maxDueDay}`,
-        variant: "destructive",
-      });
-      return;
-    }
+    const found = {
+      "recurring-name": requiredError(recurringName, "Name"),
+      "recurring-amount": amountError(recurringAmount),
+      "recurring-category": recurringCategoryId ? null : "Choose a category",
+      "recurring-due-day":
+        dueDay >= 1 && dueDay <= maxDueDay
+          ? null
+          : recurringFrequency === "weekly"
+            ? "Enter a day from 1 (Monday) to 7 (Sunday)"
+            : "Enter a day of the month from 1 to 31",
+    };
+    setErrors(found);
+    if (Object.values(found).some(Boolean)) return;
     const categoryField =
       recurringKind === "income"
         ? { income_category_id: recurringCategoryId }
@@ -267,18 +300,16 @@ export function Settings() {
 
   // Export handler
   const handleExport = () => {
-    if (!exportStartDate || !exportEndDate) {
-      toast({ title: "Error", description: "Please select date range", variant: "destructive" });
-      return;
-    }
-    if (exportStartDate > exportEndDate) {
-      toast({
-        title: "Error",
-        description: "From date must be before To date",
-        variant: "destructive",
-      });
-      return;
-    }
+    const found = {
+      "export-start": exportStartDate ? null : "Choose a start date",
+      "export-end": !exportEndDate
+        ? "Choose an end date"
+        : exportStartDate && exportStartDate > exportEndDate
+          ? "The end date must be on or after the start date"
+          : null,
+    };
+    setErrors(found);
+    if (found["export-start"] || found["export-end"]) return;
     api.exportCSV(exportStartDate, exportEndDate).catch((error: Error) =>
       toast({
         title: "Error",
@@ -294,7 +325,7 @@ export function Settings() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Settings</h1>
+      <PageHeader title="Settings" description="Budgets, categories, recurring items and more" />
       {/* Budget Settings */}
       <BudgetSettings />
       {/* Categories */}
@@ -426,7 +457,14 @@ export function Settings() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-8">No recurring expenses</p>
+            <div className="flex flex-col items-center gap-3 py-8 text-center text-muted-foreground">
+              <p>
+                No recurring bills or income yet. Add rent, wifi or your salary to get reminders.
+              </p>
+              <Button size="sm" variant="outline" onClick={() => openRecurringDialog()}>
+                Add a recurring item
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -437,26 +475,34 @@ export function Settings() {
           <CardTitle className="text-lg">Export Data</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-wrap items-start gap-4">
             <div className="space-y-2">
-              <Label>From Date</Label>
+              <Label htmlFor="export-start">From Date</Label>
               <Input
+                id="export-start"
                 type="date"
                 value={exportStartDate}
                 onChange={(e) => setExportStartDate(e.target.value)}
                 className="w-40"
+                aria-invalid={!!errors["export-start"]}
+                aria-describedby="export-start-error"
               />
+              <FieldError id="export-start-error" message={errors["export-start"]} />
             </div>
             <div className="space-y-2">
-              <Label>To Date</Label>
+              <Label htmlFor="export-end">To Date</Label>
               <Input
+                id="export-end"
                 type="date"
                 value={exportEndDate}
                 onChange={(e) => setExportEndDate(e.target.value)}
                 className="w-40"
+                aria-invalid={!!errors["export-end"]}
+                aria-describedby="export-end-error"
               />
+              <FieldError id="export-end-error" message={errors["export-end"]} />
             </div>
-            <Button onClick={handleExport} className="gap-2">
+            <Button onClick={handleExport} className="gap-2 sm:mt-8">
               <Download className="h-4 w-4" />
               Download CSV
             </Button>
@@ -474,19 +520,26 @@ export function Settings() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Name *</Label>
+              <Label htmlFor="category-name">Name *</Label>
               <Input
+                id="category-name"
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
                 placeholder="e.g., Food"
+                maxLength={100}
+                aria-invalid={!!errors["category-name"]}
+                aria-describedby="category-name-error"
               />
+              <FieldError id="category-name-error" message={errors["category-name"]} />
             </div>
             <div className="space-y-2">
-              <Label>Icon (emoji)</Label>
+              <Label htmlFor="category-icon">Icon (emoji)</Label>
               <Input
+                id="category-icon"
                 value={categoryIcon}
                 onChange={(e) => setCategoryIcon(e.target.value)}
                 placeholder="e.g., 🍔"
+                maxLength={50}
               />
             </div>
           </div>
@@ -516,22 +569,31 @@ export function Settings() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Name *</Label>
+              <Label htmlFor="recurring-name">Name *</Label>
               <Input
+                id="recurring-name"
                 value={recurringName}
                 onChange={(e) => setRecurringName(e.target.value)}
                 placeholder="e.g., Monthly Wifi"
+                maxLength={100}
+                aria-invalid={!!errors["recurring-name"]}
+                aria-describedby="recurring-name-error"
               />
+              <FieldError id="recurring-name-error" message={errors["recurring-name"]} />
             </div>
             <div className="space-y-2">
-              <Label>Amount (৳) *</Label>
+              <Label htmlFor="recurring-amount">Amount (৳) *</Label>
               <Input
+                id="recurring-amount"
                 type="number"
                 step="0.01"
                 value={recurringAmount}
                 onChange={(e) => setRecurringAmount(e.target.value)}
                 placeholder="0.00"
+                aria-invalid={!!errors["recurring-amount"]}
+                aria-describedby="recurring-amount-error"
               />
+              <FieldError id="recurring-amount-error" message={errors["recurring-amount"]} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="recurring-kind">Type *</Label>
@@ -555,7 +617,11 @@ export function Settings() {
             <div className="space-y-2">
               <Label htmlFor="recurring-category">Category *</Label>
               <Select value={recurringCategoryId} onValueChange={setRecurringCategoryId}>
-                <SelectTrigger id="recurring-category">
+                <SelectTrigger
+                  id="recurring-category"
+                  aria-invalid={!!errors["recurring-category"]}
+                  aria-describedby="recurring-category-error"
+                >
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -569,14 +635,15 @@ export function Settings() {
                   ))}
                 </SelectContent>
               </Select>
+              <FieldError id="recurring-category-error" message={errors["recurring-category"]} />
             </div>
             <div className="space-y-2">
-              <Label>Frequency *</Label>
+              <Label htmlFor="recurring-frequency">Frequency *</Label>
               <Select
                 value={recurringFrequency}
                 onValueChange={(v) => setRecurringFrequency(v as "weekly" | "monthly")}
               >
-                <SelectTrigger>
+                <SelectTrigger id="recurring-frequency">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -586,16 +653,20 @@ export function Settings() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Due Day *</Label>
+              <Label htmlFor="recurring-due-day">Due Day *</Label>
               <Input
+                id="recurring-due-day"
                 type="number"
                 min={1}
                 max={recurringFrequency === "weekly" ? 7 : 31}
                 value={recurringDueDay}
                 onChange={(e) => setRecurringDueDay(e.target.value)}
                 placeholder={recurringFrequency === "weekly" ? "1-7 (Mon=1)" : "1-31"}
+                aria-invalid={!!errors["recurring-due-day"]}
+                aria-describedby="recurring-due-day-error recurring-due-day-hint"
               />
-              <p className="text-xs text-muted-foreground">
+              <FieldError id="recurring-due-day-error" message={errors["recurring-due-day"]} />
+              <p id="recurring-due-day-hint" className="text-xs text-muted-foreground">
                 {recurringFrequency === "weekly" ? "1=Monday, 7=Sunday" : "Day of month (1-31)"}
               </p>
             </div>

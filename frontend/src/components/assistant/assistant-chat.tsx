@@ -273,7 +273,8 @@ export function AssistantChat() {
   const history = conversations.data?.conversations ?? [];
 
   return (
-    <div className="relative grid h-[calc(100dvh-7rem)] min-h-[28rem] gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
+    // Fills the screen below the top bar (and above the phone tab bar)
+    <div className="relative grid h-[calc(100dvh-11.5rem)] min-h-[26rem] gap-4 md:h-[calc(100dvh-7rem)] lg:grid-cols-[16rem_minmax(0,1fr)]">
       {/* History: sidebar on large screens, a toggled panel on phones */}
       <aside
         aria-label="Chat history"
@@ -413,7 +414,7 @@ export function AssistantChat() {
                 onKeyDown={onKeyDown}
                 rows={1}
                 maxLength={2000}
-                placeholder="Ask about your money, or type an expense…"
+                placeholder="Ask, or add an expense…"
                 aria-label="Message the assistant"
                 className="max-h-40 min-h-10 flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
               />

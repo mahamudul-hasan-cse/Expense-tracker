@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/shared/error-state";
+import { PageHeader } from "@/components/shared/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { goalMonthlyNeed } from "@/lib/cashflow";
 import { useDeleteGoal, useGoals, useUpdateGoal } from "@/lib/queries";
@@ -27,7 +29,7 @@ import { GoalStatusBadge } from "./goal-status-badge";
 
 export function GoalsPage() {
   const { toast } = useToast();
-  const { data, isLoading } = useGoals();
+  const { data, isLoading, isError, refetch } = useGoals();
   const updateGoal = useUpdateGoal();
   const deleteGoal = useDeleteGoal();
 
@@ -108,59 +110,79 @@ export function GoalsPage() {
               </p>
             )}
           </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            {!isArchived && (
-              <>
+          {/* Main actions on the left; archive/edit/delete as one group of icon buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <div className="flex flex-wrap gap-2">
+              {isArchived ? (
                 <Button
                   size="sm"
-                  onClick={() => setContributing({ goal, mode: "add" })}
+                  variant="outline"
+                  onClick={() => setArchived(goal, false)}
                   className="gap-1"
                 >
-                  <Plus className="h-4 w-4" />
-                  Add money
+                  <ArchiveRestore className="h-4 w-4" />
+                  Restore
                 </Button>
-                {goal.saved > 0 && (
+              ) : goal.state === "completed" ? (
+                <Button size="sm" onClick={() => setArchived(goal, true)} className="gap-1">
+                  <Archive className="h-4 w-4" />
+                  Archive
+                </Button>
+              ) : (
+                <>
                   <Button
                     size="sm"
-                    variant="outline"
-                    onClick={() => setContributing({ goal, mode: "withdraw" })}
+                    onClick={() => setContributing({ goal, mode: "add" })}
                     className="gap-1"
                   >
-                    <Minus className="h-4 w-4" />
-                    Take back
+                    <Plus className="h-4 w-4" />
+                    Add money
                   </Button>
-                )}
-              </>
-            )}
-            <Button
-              size="sm"
-              variant={goal.state === "completed" && !isArchived ? "default" : "ghost"}
-              onClick={() => setArchived(goal, !isArchived)}
-              className="gap-1"
-            >
-              {isArchived ? (
-                <ArchiveRestore className="h-4 w-4" />
-              ) : (
-                <Archive className="h-4 w-4" />
+                  {goal.saved > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setContributing({ goal, mode: "withdraw" })}
+                      className="gap-1"
+                    >
+                      <Minus className="h-4 w-4" />
+                      Take back
+                    </Button>
+                  )}
+                </>
               )}
-              {isArchived ? "Restore" : "Archive"}
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label={`Edit ${goal.name}`}
-              onClick={() => openForm(goal)}
-            >
-              <Edit2 className="h-4 w-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label={`Delete ${goal.name}`}
-              onClick={() => setDeleting(goal)}
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
+            </div>
+            <div className="flex items-center">
+              {!isArchived && goal.state !== "completed" && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={`Archive ${goal.name}`}
+                  title="Archive"
+                  onClick={() => setArchived(goal, true)}
+                >
+                  <Archive className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Edit ${goal.name}`}
+                title="Edit"
+                onClick={() => openForm(goal)}
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Delete ${goal.name}`}
+                title="Delete"
+                onClick={() => setDeleting(goal)}
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -169,20 +191,20 @@ export function GoalsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Savings Goals</h1>
-          <p className="text-muted-foreground">
-            Earmark your savings for the things you&apos;re working toward
-          </p>
-        </div>
-        <Button onClick={() => openForm()} className="gap-2">
-          <Plus className="h-4 w-4" />
-          New Goal
-        </Button>
-      </div>
+      <PageHeader
+        title="Savings Goals"
+        description="Earmark your savings for the things you're working toward"
+        actions={
+          <Button onClick={() => openForm()} className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Goal
+          </Button>
+        }
+      />
 
-      {isLoading ? (
+      {isError ? (
+        <ErrorState message="Couldn't load your goals." onRetry={() => refetch()} />
+      ) : isLoading ? (
         <div className="grid gap-4 md:grid-cols-2">
           <Skeleton className="h-48" />
           <Skeleton className="h-48" />
