@@ -12,13 +12,14 @@ DEFAULT_CATEGORIES = [
     ("Smoking", "🚬"),
 ]
 
-# Keep in sync with the seed in the add_income_and_savings_goals migration
+# Existing users got these from the add_income_and_savings_goals migration ("Other"
+# had ➕, which looked like an "add" button; changed to 💰 by migration c7e9a1b3d5f2)
 DEFAULT_INCOME_CATEGORIES = [
     ("Salary", "💼"),
     ("Freelance", "💻"),
     ("Business", "🏪"),
     ("Gift", "🎁"),
-    ("Other", "➕"),
+    ("Other", "💰"),
 ]
 
 

@@ -7,12 +7,12 @@ the duplicate, so this drives the ASGI app directly with a strict `send`.
 """
 
 import asyncio
-from datetime import date
 
 import pytest
 
 from app.main import app
 from app.rate_limit import limiter
+from app.timeutil import today as app_today
 from tests.conftest import first_category_id
 
 API = "/api/v1"
@@ -77,7 +77,7 @@ def test_csv_export_streams_with_rate_limiting_enabled(client, auth_headers, rat
     for amount in (10, 20, 30):
         client.post(f"{API}/expenses", json={"amount": amount, "category_id": cat}, headers=auth_headers)
     token = auth_headers["Authorization"].split()[1]
-    today = date.today()
+    today = app_today()
 
     messages = strict_asgi_get(f"{API}/export/csv", f"start_date={today}&end_date={today}", token)
     starts = [m for m in messages if m["type"] == "http.response.start"]

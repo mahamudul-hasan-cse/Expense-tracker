@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/select";
 import { useCreateCategory, useCreateExpense, useUpdateExpense } from "@/lib/queries";
 import { todayISO } from "@/lib/utils";
+import { amountError, notFutureError } from "@/lib/validation";
+import { FieldError } from "@/components/ui/field-error";
 import { Category, Expense, ExpenseCreate, ExpenseUpdate } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
@@ -66,10 +68,15 @@ export function ExpenseFormDialog({
 
   const isEditing = !!expense;
 
+  const [fieldErrors, setFieldErrors] = useState<
+    Record<"amount" | "category" | "date", string | null>
+  >({ amount: null, category: null, date: null });
+
   useEffect(() => {
     setAddingCategory(false);
     setNewCategoryName("");
     setNewCategoryIcon("");
+    setFieldErrors({ amount: null, category: null, date: null });
   }, [open]);
 
   const handleCategoryChange = (value: string) => {
@@ -133,14 +140,14 @@ export function ExpenseFormDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!amount || !categoryId) {
-      toast({
-        title: "Error",
-        description: "Amount and category are required",
-        variant: "destructive",
-      });
-      return;
-    }
+    // Same rules as the backend, shown next to the fields (input is kept)
+    const errors = {
+      amount: amountError(amount),
+      category: categoryId ? null : "Choose a category",
+      date: notFutureError(expenseDate, todayISO()),
+    };
+    setFieldErrors(errors);
+    if (errors.amount || errors.category || errors.date) return;
 
     try {
       if (isEditing && expense) {
@@ -202,7 +209,7 @@ export function ExpenseFormDialog({
             )}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="space-y-2">
             <Label htmlFor="amount">Amount (৳) *</Label>
             <Input
@@ -213,15 +220,21 @@ export function ExpenseFormDialog({
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              required
+              aria-invalid={!!fieldErrors.amount}
+              aria-describedby="amount-error"
             />
+            <FieldError id="amount-error" message={fieldErrors.amount} />
           </div>
 
           {!preselectedCategory && (
             <div className="space-y-2">
               <Label htmlFor="category">Category *</Label>
               <Select value={categoryId} onValueChange={handleCategoryChange}>
-                <SelectTrigger id="category">
+                <SelectTrigger
+                  id="category"
+                  aria-invalid={!!fieldErrors.category}
+                  aria-describedby="category-error"
+                >
                   <SelectValue placeholder="Select a category">
                     {selectedCategory && (
                       <span className="flex items-center gap-2">
@@ -248,6 +261,7 @@ export function ExpenseFormDialog({
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <FieldError id="category-error" message={fieldErrors.category} />
 
               {addingCategory && (
                 <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
@@ -318,7 +332,10 @@ export function ExpenseFormDialog({
               value={expenseDate}
               onChange={(e) => setExpenseDate(e.target.value)}
               max={todayISO()}
+              aria-invalid={!!fieldErrors.date}
+              aria-describedby="date-error"
             />
+            <FieldError id="date-error" message={fieldErrors.date} />
           </div>
 
           <DialogFooter>

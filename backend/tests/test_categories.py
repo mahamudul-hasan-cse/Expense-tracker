@@ -1,5 +1,4 @@
-from datetime import date
-
+from app.timeutil import today as app_today
 from tests.conftest import first_category_id
 
 API = "/api/v1"
@@ -51,7 +50,7 @@ def test_default_categories_cannot_be_deleted(client, auth_headers):
 
 def test_delete_blocked_while_in_use(client, auth_headers):
     gym = client.post(f"{API}/categories", json={"name": "Gym"}, headers=auth_headers).json()
-    today = date.today()
+    today = app_today()
     exp = client.post(f"{API}/expenses", json={"amount": 5, "category_id": gym["id"]}, headers=auth_headers).json()
     rec = client.post(
         f"{API}/recurring",

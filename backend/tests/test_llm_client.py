@@ -110,7 +110,7 @@ def test_zdr_can_be_turned_off_and_tools_disabled():
         seen.update(kwargs)
         return FakeStream([chunk(content="ok", finish="stop")])
 
-    collect(make_client(create, assistant_require_zdr=False), allow_tools=False)
+    collect(make_client(create, assistant_require_zdr=False, assistant_fallback_models=""), allow_tools=False)
     assert "zdr" not in seen["extra_body"]["provider"] and "models" not in seen["extra_body"]
     assert seen["tool_choice"] == "none"
 
@@ -143,6 +143,19 @@ def test_parallel_tool_calls_flag_is_opt_in():
     assert seen["parallel_tool_calls"] is True
     collect(make_client(create, assistant_parallel_tool_calls=True), allow_tools=False)
     assert "parallel_tool_calls" not in seen
+
+
+def test_default_models_are_haiku_then_gemini_fallback():
+    """The eval's choice (docs/ASSISTANT_EVAL.md): Haiku 5.5, Gemini 3.5 Flash Lite on failure."""
+    seen = {}
+
+    async def create(**kwargs):
+        seen.update(kwargs)
+        return FakeStream([chunk(content="ok", finish="stop")])
+
+    collect(make_client(create))
+    assert seen["model"] == "anthropic/claude-haiku-5.5"
+    assert seen["extra_body"]["models"] == ["anthropic/claude-haiku-5.5", "google/gemini-3.5-flash-lite"]
 
 
 def test_mid_stream_error_finish_reason():

@@ -157,7 +157,7 @@ export function ProposalCard({ proposal, status, messageId, onChange }: Proposal
           className={cn(
             "mt-3 flex items-center gap-1.5 text-sm font-medium",
             status === "confirmed"
-              ? "text-emerald-600 dark:text-emerald-400"
+              ? "text-emerald-700 dark:text-emerald-400"
               : "text-muted-foreground"
           )}
         >

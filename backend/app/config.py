@@ -51,7 +51,9 @@ class Settings(BaseSettings):
     openrouter_api_key: SecretStr = SecretStr("")
     # Chosen from the eval (docs/ASSISTANT_EVAL.md); empty also means DEFAULT_ASSISTANT_MODEL
     assistant_model: str = "anthropic/claude-haiku-5.5"
-    assistant_fallback_models: str = ""  # comma-separated
+    # Comma-separated, tried in order when the main model fails. Gemini 3.5 Flash Lite scored
+    # 18/18 in the eval and is a different vendor, so it covers an Anthropic outage.
+    assistant_fallback_models: str = "google/gemini-3.5-flash-lite"
     assistant_app_url: str = "http://localhost:3000"
     assistant_app_name: str = "Wallet Agent"
     assistant_require_zdr: bool = True
@@ -73,6 +75,18 @@ class Settings(BaseSettings):
     # Previous messages resent with each question (3 exchanges); older answers are trimmed
     assistant_history_messages: int = 6
     assistant_timeout_seconds: float = 60.0
+
+    # Shared with the frontend proxy (Vercel). Requests carrying it may state the real
+    # client IP in X-Client-IP, used for per-IP rate limits and logs. Empty = ignore
+    # X-Client-IP and use the direct peer address. See app/client_ip.py.
+    proxy_shared_secret: SecretStr = SecretStr("")
+
+    # Error monitoring (Sentry). Off unless SENTRY_DSN is set.
+    sentry_dsn: SecretStr = SecretStr("")
+    sentry_environment: str = ""  # defaults to APP_ENV
+    sentry_release: str = ""  # e.g. the git commit; set by the deploy platform
+    # Share of requests traced for performance (0 = errors only, which fits the free tier)
+    sentry_traces_sample_rate: float = Field(0.0, ge=0.0, le=1.0)
 
     @property
     def assistant_models(self) -> list[str]:
@@ -113,6 +127,8 @@ class Settings(BaseSettings):
             problems.append("ALLOWED_ORIGINS cannot contain '*'; list the frontend origin(s)")
         if not self.origins:
             problems.append("ALLOWED_ORIGINS must list the frontend origin(s)")
+        if 0 < len(self.proxy_shared_secret.get_secret_value()) < 32:
+            problems.append("PROXY_SHARED_SECRET must be at least 32 characters")
         if problems:
             raise ValueError("Invalid production configuration:\n  - " + "\n  - ".join(problems))
         return self

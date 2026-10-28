@@ -1,7 +1,8 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 
+from app.timeutil import today as app_today
 from tests.conftest import first_category_id
 
 API = "/api/v1"
@@ -48,13 +49,13 @@ def test_amount_is_returned_as_number_with_2dp_precision(client, auth_headers):
 
 def test_future_date_rejected_today_default(client, auth_headers):
     cat = first_category_id(client, auth_headers)
-    tomorrow = date.today() + timedelta(days=1)
+    tomorrow = app_today() + timedelta(days=1)
     res = client.post(
         f"{API}/expenses", json={"amount": 1, "category_id": cat, "expense_date": str(tomorrow)}, headers=auth_headers
     )
     assert res.status_code == 422
     assert "future" in res.json()["error"]["message"]
-    assert add(client, auth_headers, 1, cat)["expense_date"] == str(date.today())
+    assert add(client, auth_headers, 1, cat)["expense_date"] == str(app_today())
 
 
 def test_note_max_length(client, auth_headers):
@@ -88,7 +89,7 @@ def test_update_rules(client, auth_headers):
     assert client.put(url, json={}, headers=auth_headers).status_code == 400
     assert client.put(url, json={"amount": None}, headers=auth_headers).status_code == 400
     assert (
-        client.put(url, json={"expense_date": str(date.today() + timedelta(days=1))}, headers=auth_headers).status_code
+        client.put(url, json={"expense_date": str(app_today() + timedelta(days=1))}, headers=auth_headers).status_code
         == 422
     )
     cleared = client.put(url, json={"note": None}, headers=auth_headers)
@@ -110,7 +111,7 @@ def test_delete_then_404(client, auth_headers):
 @pytest.fixture
 def seeded(client, auth_headers):
     cats = {c["name"]: c["id"] for c in client.get(f"{API}/categories", headers=auth_headers).json()["categories"]}
-    today = date.today()
+    today = app_today()
     add(client, auth_headers, 30, cats["Rickshaw"], "campus", today)
     add(client, auth_headers, 800, cats["Wifi Bill"], "monthly wifi", today - timedelta(days=3))
     add(client, auth_headers, 250, cats["Random"], "lunch 100% spicy", today - timedelta(days=10))

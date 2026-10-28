@@ -21,11 +21,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { Expense } from "@/types";
 import { ExpenseListSkeleton } from "@/components/shared/skeletons";
+import { ErrorState } from "@/components/shared/error-state";
+import { PageHeader } from "@/components/shared/page-header";
+import { TransactionRow } from "@/components/shared/transaction-row";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit2, Trash2, ChevronLeft, ChevronRight, X, Search } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, X, Search, Receipt } from "lucide-react";
 import { ExpenseFormDialog } from "./expense-form-dialog";
 import { useExpenses, useCategories, useDeleteExpense } from "@/lib/queries";
 import { buildExpenseQuery } from "./expense-filters";
@@ -48,7 +51,12 @@ export function ExpenseList() {
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
 
   // React Query hooks
-  const { data: expensesData, isLoading: expensesLoading } = useExpenses(
+  const {
+    data: expensesData,
+    isLoading: expensesLoading,
+    isError: expensesError,
+    refetch: refetchExpenses,
+  } = useExpenses(
     buildExpenseQuery({ page, categoryFilter, startDate, endDate, search: deferredSearch })
   );
   const { data: categoriesData, isLoading: categoriesLoading } = useCategories();
@@ -102,26 +110,28 @@ export function ExpenseList() {
 
   const hasFilters = categoryFilter || startDate || endDate || searchQuery;
 
-  if (loading && expenses.length === 0) {
+  if (loading && expenses.length === 0 && !expensesError) {
     return <ExpenseListSkeleton />;
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Expenses</h1>
-        <Button
-          onClick={() => {
-            setEditingExpense(null);
-            setDialogOpen(true);
-          }}
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Add Expense
-        </Button>
-      </div>
+      <PageHeader
+        title="Expenses"
+        description="Everything you've spent, with search and filters"
+        actions={
+          <Button
+            onClick={() => {
+              setEditingExpense(null);
+              setDialogOpen(true);
+            }}
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Expense
+          </Button>
+        }
+      />
 
       {/* Filters */}
       <Card>
@@ -210,54 +220,52 @@ export function ExpenseList() {
       {/* Expense Table */}
       <Card>
         <CardContent className="p-0">
-          {expenses.length > 0 ? (
-            <div className="divide-y">
+          {expensesError ? (
+            <ErrorState
+              className="m-4"
+              message="Couldn't load your expenses."
+              onRetry={() => refetchExpenses()}
+            />
+          ) : expenses.length > 0 ? (
+            <ul className="divide-y">
               {expenses.map((expense) => (
-                <div
+                <TransactionRow
                   key={expense.id}
-                  className="flex items-center justify-between p-4 hover:bg-muted/50"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="text-2xl">{expense.category.icon}</span>
-                    <div>
-                      <p className="font-medium">{formatCurrency(Number(expense.amount))}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {expense.category.name}
-                        {expense.note && ` · ${expense.note}`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <p className="text-sm text-muted-foreground">
-                      {formatDate(expense.expense_date)}
-                    </p>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Edit ${expense.category.name} expense, ${formatCurrency(Number(expense.amount))}`}
-                        onClick={() => handleEdit(expense)}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Delete ${expense.category.name} expense, ${formatCurrency(Number(expense.amount))}`}
-                        onClick={() => {
-                          setDeletingExpense(expense);
-                          setDeleteDialogOpen(true);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                  icon={expense.category.icon}
+                  amount={formatCurrency(Number(expense.amount))}
+                  category={expense.category.name}
+                  note={expense.note}
+                  date={expense.expense_date}
+                  label={`${expense.category.name} expense, ${formatCurrency(Number(expense.amount))}`}
+                  onEdit={() => handleEdit(expense)}
+                  onDelete={() => {
+                    setDeletingExpense(expense);
+                    setDeleteDialogOpen(true);
+                  }}
+                />
               ))}
+            </ul>
+          ) : hasFilters ? (
+            <div className="flex flex-col items-center gap-3 py-12 text-center text-muted-foreground">
+              <p>No expenses match these filters.</p>
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-12">No expenses found</p>
+            <div className="flex flex-col items-center gap-3 py-12 text-center text-muted-foreground">
+              <Receipt className="h-8 w-8" aria-hidden />
+              <p>No expenses yet.</p>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingExpense(null);
+                  setDialogOpen(true);
+                }}
+              >
+                Add your first expense
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>

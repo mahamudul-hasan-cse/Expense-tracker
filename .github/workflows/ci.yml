@@ -141,3 +141,33 @@ jobs:
             frontend/playwright-report
             frontend/test-results
           retention-days: 7
+
+  docker:
+    name: Docker (images build, full stack starts)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and start database, API and web app
+        run: docker compose --profile full up --build --detach --wait --wait-timeout 180
+      - name: API health (migrations ran, database reachable)
+        run: curl --fail --silent --show-error http://localhost:8000/health
+      - name: Register through the web app's /api proxy
+        run: |
+          status=$(curl --silent --output /tmp/register.json --write-out '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"ci@example.com","password":"ci-docker-password"}' \
+            http://localhost:3000/api/v1/auth/register)
+          cat /tmp/register.json
+          test "$status" = "201"
+      - name: Images run as non-root
+        run: |
+          test "$(docker compose --profile full exec -T backend id -u)" != "0"
+          test "$(docker compose --profile full exec -T frontend id -u)" != "0"
+      - name: Logs on failure
+        if: failure()
+        run: docker compose --profile full logs --no-color
+      - name: Stop
+        if: always()
+        run: docker compose --profile full down --volumes

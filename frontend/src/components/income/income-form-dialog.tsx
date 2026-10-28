@@ -22,6 +22,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useCreateIncome, useCreateIncomeCategory, useUpdateIncome } from "@/lib/queries";
 import { todayISO } from "@/lib/utils";
+import { amountError, notFutureError } from "@/lib/validation";
+import { FieldError } from "@/components/ui/field-error";
 import { Category, Income } from "@/types";
 
 // Sentinel Select value for the "+ Add new category" option
@@ -48,6 +50,9 @@ export function IncomeFormDialog({ open, onClose, categories, income }: IncomeFo
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [createdCategory, setCreatedCategory] = useState<Category | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<
+    Record<"amount" | "category" | "date", string | null>
+  >({ amount: null, category: null, date: null });
 
   const isEditing = !!income;
 
@@ -58,6 +63,7 @@ export function IncomeFormDialog({ open, onClose, categories, income }: IncomeFo
     setNote(income?.note ?? "");
     setAddingCategory(false);
     setNewCategoryName("");
+    setFieldErrors({ amount: null, category: null, date: null });
   }, [income, open]);
 
   const selectedCategory =
@@ -84,14 +90,14 @@ export function IncomeFormDialog({ open, onClose, categories, income }: IncomeFo
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!amount || !categoryId) {
-      toast({
-        title: "Error",
-        description: "Amount and category are required",
-        variant: "destructive",
-      });
-      return;
-    }
+    // Same rules as the backend, shown next to the fields (input is kept)
+    const errors = {
+      amount: amountError(amount),
+      category: categoryId ? null : "Choose a category",
+      date: notFutureError(incomeDate, todayISO()),
+    };
+    setFieldErrors(errors);
+    if (errors.amount || errors.category || errors.date) return;
     try {
       if (isEditing && income) {
         await updateIncome.mutateAsync({
@@ -130,7 +136,7 @@ export function IncomeFormDialog({ open, onClose, categories, income }: IncomeFo
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Income" : "Add Income"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="space-y-2">
             <Label htmlFor="income-amount">Amount (৳) *</Label>
             <Input
@@ -141,8 +147,10 @@ export function IncomeFormDialog({ open, onClose, categories, income }: IncomeFo
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              required
+              aria-invalid={!!fieldErrors.amount}
+              aria-describedby="income-amount-error"
             />
+            <FieldError id="income-amount-error" message={fieldErrors.amount} />
           </div>
 
           <div className="space-y-2">
@@ -153,7 +161,11 @@ export function IncomeFormDialog({ open, onClose, categories, income }: IncomeFo
                 v === NEW_CATEGORY ? setAddingCategory(true) : setCategoryId(v)
               }
             >
-              <SelectTrigger id="income-category">
+              <SelectTrigger
+                id="income-category"
+                aria-invalid={!!fieldErrors.category}
+                aria-describedby="income-category-error"
+              >
                 <SelectValue placeholder="Select a category">
                   {selectedCategory && (
                     <span className="flex items-center gap-2">
@@ -180,6 +192,7 @@ export function IncomeFormDialog({ open, onClose, categories, income }: IncomeFo
                 </SelectItem>
               </SelectContent>
             </Select>
+            <FieldError id="income-category-error" message={fieldErrors.category} />
             {addingCategory && (
               <div className="flex gap-2 rounded-lg border bg-muted/30 p-3">
                 <Input
@@ -212,7 +225,10 @@ export function IncomeFormDialog({ open, onClose, categories, income }: IncomeFo
               value={incomeDate}
               max={todayISO()}
               onChange={(e) => setIncomeDate(e.target.value)}
+              aria-invalid={!!fieldErrors.date}
+              aria-describedby="income-date-error"
             />
+            <FieldError id="income-date-error" message={fieldErrors.date} />
           </div>
 
           <div className="space-y-2">

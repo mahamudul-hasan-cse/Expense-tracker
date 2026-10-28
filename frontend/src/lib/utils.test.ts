@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { formatCurrency, formatDate, formatDateForInput, formatDateFull, todayISO } from "./utils";
+import {
+  budgetLevel,
+  formatCurrency,
+  formatCurrencyCompact,
+  formatDate,
+  formatDateForInput,
+  formatDateFull,
+  todayISO,
+} from "./utils";
 
 describe("todayISO (Asia/Dhaka)", () => {
   it("returns the Dhaka date before 6 AM, when UTC is still on the previous day", () => {
@@ -43,5 +51,27 @@ describe("formatCurrency", () => {
     [99.999, "৳100"],
   ])("formats %s as %s", (amount, expected) => {
     expect(formatCurrency(amount)).toBe(expected);
+  });
+
+  it.each([
+    [950, "৳950"],
+    [16000, "৳16K"],
+    [1250000, "৳1.3M"],
+  ])("formats %s compactly for chart axes as %s", (amount, expected) => {
+    expect(formatCurrencyCompact(amount)).toBe(expected);
+  });
+});
+
+describe("budgetLevel", () => {
+  it.each([
+    [0, "ok"],
+    [79.9, "ok"],
+    [80, "close"],
+    [90.8, "close"], // the screenshot case: under budget must not look like over budget
+    [100, "close"],
+    [100.1, "over"],
+    [306, "over"],
+  ] as const)("%s%% is %s", (pct, level) => {
+    expect(budgetLevel(pct)).toBe(level);
   });
 });

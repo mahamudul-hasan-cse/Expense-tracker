@@ -4,9 +4,17 @@ import uuid
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.client_ip import client_ip_from_scope
 from app.logging_config import request_id_var
+from app.monitoring import tag_request
 
 logger = logging.getLogger("app.requests")
+
+_SECURITY_HEADERS = [
+    (b"x-content-type-options", b"nosniff"),
+    (b"x-frame-options", b"DENY"),
+    (b"referrer-policy", b"no-referrer"),
+]
 
 
 class RequestLogMiddleware:
@@ -24,6 +32,7 @@ class RequestLogMiddleware:
         incoming = dict(scope["headers"]).get(b"x-request-id", b"").decode("latin-1")
         request_id = incoming if 0 < len(incoming) <= 64 and incoming.isprintable() else uuid.uuid4().hex
         request_id_var.set(request_id)
+        tag_request(request_id)
 
         start = time.perf_counter()
         status_code = 500
@@ -32,13 +41,15 @@ class RequestLogMiddleware:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message["status"]
-                message.setdefault("headers", []).append((b"x-request-id", request_id.encode()))
+                headers = message.setdefault("headers", [])
+                headers.append((b"x-request-id", request_id.encode()))
+                # JSON API: never sniffed as another type, never framed
+                headers.extend(_SECURITY_HEADERS)
             await send(message)
 
         try:
             await self.app(scope, receive, send_with_id)
         finally:
-            client = scope.get("client")
             level = logging.ERROR if status_code >= 500 else logging.INFO
             logger.log(
                 level,
@@ -51,6 +62,6 @@ class RequestLogMiddleware:
                     "path": scope["path"],
                     "status": status_code,
                     "duration_ms": round((time.perf_counter() - start) * 1000, 1),
-                    "client_ip": client[0] if client else None,
+                    "client_ip": client_ip_from_scope(scope),
                 },
             )

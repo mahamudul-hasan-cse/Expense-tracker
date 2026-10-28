@@ -19,6 +19,7 @@ from app.database import get_db  # noqa: E402
 from app.errors import error_response, register_error_handlers  # noqa: E402
 from app.logging_config import configure_logging  # noqa: E402
 from app.middleware import RequestLogMiddleware  # noqa: E402
+from app.monitoring import init_sentry  # noqa: E402
 from app.rate_limit import RateLimitMiddleware, limiter  # noqa: E402
 from app.routers import (  # noqa: E402
     auth,
@@ -35,6 +36,7 @@ from app.routers import (  # noqa: E402
 
 configure_logging(settings.log_level, json_logs=settings.app_env == "production")
 logger = logging.getLogger("app")
+init_sentry(settings)  # no-op unless SENTRY_DSN is set
 
 app = FastAPI(title="Wallet Agent API", description="A manual expense tracker API", version="1.0.0")
 

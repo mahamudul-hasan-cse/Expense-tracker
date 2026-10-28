@@ -95,9 +95,24 @@ async function assertNoHorizontalOverflow(page: Page, label: string) {
   // Compare with the configured width, not window.innerWidth: mobile browsers widen
   // the layout viewport to fit overflowing content, so innerWidth would grow with it
   const screenWidth = page.viewportSize()!.width;
-  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  const { scrollWidth, culprits } = await page.evaluate((width) => {
+    // The innermost elements sticking out past the screen's right edge, named in the error
+    const describe = (el: Element) =>
+      `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ""}.${[...el.classList].slice(0, 4).join(".")} ` +
+      `"${(el.textContent ?? "").trim().slice(0, 40)}" right=${Math.round(el.getBoundingClientRect().right)}`;
+    const wide = [...document.querySelectorAll("body *")].filter(
+      (el) => el.getBoundingClientRect().right > width + 1
+    );
+    const innermost = wide.filter(
+      (el) => !wide.some((other) => other !== el && el.contains(other))
+    );
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      culprits: innermost.slice(0, 5).map(describe),
+    };
+  }, screenWidth);
   expect(
     scrollWidth,
-    `${label} is ${scrollWidth}px wide on a ${screenWidth}px screen`
+    `${label} is ${scrollWidth}px wide on a ${screenWidth}px screen. Sticking out:\n  ${culprits.join("\n  ")}`
   ).toBeLessThanOrEqual(screenWidth);
 }

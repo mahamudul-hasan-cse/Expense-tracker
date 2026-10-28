@@ -86,7 +86,7 @@ Picked **`qwen/qwen3.8-27b`**: the newest eligible model, and the cheapest in th
 | **anthropic/claude-haiku-5.5** | **18/18** | **18/18** | **$0.00041** | 87% | 3.6s | 4.3s | |
 | qwen/qwen3.8-27b | 16/18 | 17/18 | $0.00221 | 54% | 4.2s | 6.4s | One malformed tool call on the English comparison (error); a "yesterday" quick add dated today; one 5-round answer cost $0.009 |
 
-**Rule:** choose Qwen only with 18/18 accuracy, 18/18 script and a lower cost per message. Qwen failed all three, so **Haiku 5.5 stays**. `ASSISTANT_MODEL=anthropic/claude-haiku-5.5` is now set explicitly in `config.py` and `.env.example`. The fallback is kept as it is: no fallback model is configured (`ASSISTANT_FALLBACK_MODELS` empty). Gemini 3.5 Flash Lite is still the recommended one if you want one.
+**Rule:** choose Qwen only with 18/18 accuracy, 18/18 script and a lower cost per message. Qwen failed all three, so **Haiku 5.5 stays**. `ASSISTANT_MODEL=anthropic/claude-haiku-5.5` is now set explicitly in `config.py` and `.env.example`. **Fallback (set 2026-10-28):** `ASSISTANT_FALLBACK_MODELS=google/gemini-3.5-flash-lite`. It scored 18/18 here and is another vendor, so it covers an Anthropic outage. It costs ~3× Haiku per message, but it's only used when Haiku fails.
 
 ## Cost per message and limits
 - **Haiku, average $0.00041 per message** after the cost work. The range was $0.0001 (declining advice) to $0.0010 (comparison with 3 rounds).

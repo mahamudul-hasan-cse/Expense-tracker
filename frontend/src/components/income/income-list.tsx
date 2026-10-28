@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Edit2, Plus, Trash2, Wallet } from "lucide-react";
+import { Plus, Wallet } from "lucide-react";
+import { ErrorState } from "@/components/shared/error-state";
+import { PageHeader } from "@/components/shared/page-header";
+import { TransactionRow } from "@/components/shared/transaction-row";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { currentMonth, monthRange } from "@/lib/cashflow";
 import { useCashflow, useDeleteIncome, useIncomeCategories, useIncomes } from "@/lib/queries";
-import { formatCurrency, formatDateFull } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { Income } from "@/types";
 import { IncomeFormDialog } from "./income-form-dialog";
 
@@ -28,7 +31,11 @@ export function IncomeList() {
   const { toast } = useToast();
   const [month, setMonth] = useState(currentMonth());
   const { start, end } = monthRange(month);
-  const { data, isLoading } = useIncomes({ start_date: start, end_date: end, limit: 100 });
+  const { data, isLoading, isError, refetch } = useIncomes({
+    start_date: start,
+    end_date: end,
+    limit: 100,
+  });
   const { data: cashflow } = useCashflow(month);
   const { data: categoriesData } = useIncomeCategories();
   const deleteIncome = useDeleteIncome();
@@ -59,16 +66,16 @@ export function IncomeList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Income</h1>
-          <p className="text-muted-foreground">Money in: salary, freelance, gifts and more</p>
-        </div>
-        <Button onClick={() => openDialog()} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Income
-        </Button>
-      </div>
+      <PageHeader
+        title="Income"
+        description="Money in: salary, freelance, gifts and more"
+        actions={
+          <Button onClick={() => openDialog()} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Income
+          </Button>
+        }
+      />
 
       <Card>
         <CardContent className="flex flex-wrap items-end justify-between gap-4 pt-6">
@@ -85,7 +92,7 @@ export function IncomeList() {
           </div>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Total this month</p>
-            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
               {formatCurrency(cashflow?.income ?? 0)}
             </p>
           </div>
@@ -94,7 +101,13 @@ export function IncomeList() {
 
       <Card>
         <CardContent className="p-0">
-          {isLoading ? (
+          {isError ? (
+            <ErrorState
+              className="m-4"
+              message="Couldn't load your income."
+              onRetry={() => refetch()}
+            />
+          ) : isLoading ? (
             <div className="space-y-2 p-4">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
@@ -102,41 +115,18 @@ export function IncomeList() {
           ) : incomes.length > 0 ? (
             <ul className="divide-y">
               {incomes.map((income) => (
-                <li key={income.id} className="flex items-center justify-between gap-4 p-4">
-                  <div className="flex items-center gap-4">
-                    <span className="text-2xl" aria-hidden="true">
-                      {income.category.icon}
-                    </span>
-                    <div>
-                      <p className="font-medium">{formatCurrency(Number(income.amount))}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {income.category.name}
-                        {income.note && ` · ${income.note}`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">
-                      {formatDateFull(income.income_date)}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Edit income ${income.note ?? income.category.name}`}
-                      onClick={() => openDialog(income)}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Delete income ${income.note ?? income.category.name}`}
-                      onClick={() => setDeleting(income)}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </li>
+                <TransactionRow
+                  key={income.id}
+                  icon={income.category.icon}
+                  amount={formatCurrency(Number(income.amount))}
+                  amountClassName="text-emerald-700 dark:text-emerald-400"
+                  category={income.category.name}
+                  note={income.note}
+                  date={income.income_date}
+                  label={`income ${income.note ?? income.category.name}`}
+                  onEdit={() => openDialog(income)}
+                  onDelete={() => setDeleting(income)}
+                />
               ))}
             </ul>
           ) : (

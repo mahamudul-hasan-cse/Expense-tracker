@@ -1,9 +1,8 @@
 """User A must never be able to read, edit or delete user B's data."""
 
-from datetime import date
-
 import pytest
 
+from app.timeutil import today as app_today
 from tests.conftest import first_category_id
 
 API = "/api/v1"
@@ -12,7 +11,7 @@ API = "/api/v1"
 @pytest.fixture
 def alice_data(client, auth_headers):
     """Create one of everything for Alice."""
-    today = date.today()
+    today = app_today()
     category = client.post(f"{API}/categories", json={"name": "Alice Only", "icon": "A"}, headers=auth_headers).json()
     expense = client.post(
         f"{API}/expenses",
@@ -94,7 +93,7 @@ def test_cannot_edit_or_delete_other_users_records(client, alice_data, auth_head
 
 def test_cannot_use_other_users_category(client, alice_data, other_headers):
     alice_category = alice_data["category"]["id"]
-    today = date.today()
+    today = app_today()
     assert (
         client.post(
             f"{API}/expenses", json={"amount": 10, "category_id": alice_category}, headers=other_headers

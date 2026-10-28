@@ -24,7 +24,8 @@ The defaults point at those names on `localhost:5432`. Override them with:
 
 ## Backend: `uv run pytest`
 - Coverage is printed automatically, and the run **fails below 80%**.
-- What's covered: auth and tokens, cross-user isolation on every endpoint, money/date/note validation, recurring due-date rules (weekly, monthly, 31st in February, leap years, December rollover, due today), Asia/Dhaka "today" on a UTC server, stats totals and breakdowns, budgets, CSV export, rate limits, error format, CORS, `/health`, config validation, the admin CLI.
+- What's covered: auth and tokens, cross-user isolation on every endpoint, money/date/note validation, recurring due-date rules (weekly, monthly, 31st in February, leap years, December rollover, due today), Asia/Dhaka "today" on a UTC server, stats totals and breakdowns, budgets, income, goals, CSV export, rate limits and the proxy client-IP rules, error format, CORS, `/health`, config validation, the admin CLI, the migration runner, Sentry privacy scrubbing, and the AI assistant with a fake model (tools, limits, streaming, quick add, insights).
+- Tests must use `app.timeutil.today()` for "today", never `date.today()`: ruff's DTZ rules enforce it (CI runs at any hour, and UTC is a day behind Dhaka from 18:00 to 24:00).
 - Useful variants:
   - `uv run pytest tests/test_recurring.py -q`
   - `uv run pytest -k isolation`
@@ -41,7 +42,9 @@ The defaults point at those names on `localhost:5432`. Override them with:
   - a **production build** of the frontend on :3100, built into `.next-e2e` so a running `next dev` is left alone
 - The browser runs in the Asia/Dhaka timezone. Rate limiting is off and the assistant key is blanked for these runs.
 - First time only: `npx playwright install chromium`.
-- Flows: register → add expense → dashboard and list → logout → login → session restored on reload; wrong password; budget creation updating live as expenses are added; expense filters (search, category, back to All Categories, date range).
+- Flows: register → add expense → dashboard and list → logout → login → session restored on reload; wrong password; budget creation updating live as expenses are added; expense filters (search, category, back to All Categories, date range); income and goals; the assistant UI (with the assistant API faked in the browser).
+- **Layout** (`e2e/layout.spec.ts`): no page is wider than a 375px phone (the failure names the elements that stick out), chart bars spread correctly, actions reachable without hover.
+- **Accessibility** (`e2e/a11y.spec.ts`): axe-core (WCAG 2.1 A/AA) on every page and a dialog, **light and dark, desktop and 375px**; fails on serious or critical problems.
 - On failure: `npx playwright show-trace test-results/<test>/trace.zip`.
 
 ## Lint, format, types
@@ -58,5 +61,8 @@ The defaults point at those names on `localhost:5432`. Override them with:
 - **backend**: ruff, format check, mypy, pytest against a Postgres 16 service
 - **frontend**: ESLint, Prettier check, `tsc`, Vitest, production build
 - **e2e**: Playwright against a production build, with a Postgres service. Runs after the first two pass; the report is uploaded on failure.
+- **docker**: builds the API and web images, starts the full stack with docker compose, checks `/health`, registers a user through the web app's `/api` proxy, and checks both containers run as non-root.
+
+Failing backend tests appear as annotations on the commit/PR (file, line and error), so you can see them without opening the log.
 
 Dependencies are cached (uv, npm, Playwright browsers). `OPENROUTER_API_KEY` is empty in CI.

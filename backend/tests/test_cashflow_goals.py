@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.goals import compute_progress
+from app.timeutil import today as app_today
 
 API = "/api/v1"
 
@@ -78,7 +79,7 @@ def test_cashflow_without_income_has_null_rate(client, auth_headers, ids):
 def test_cashflow_month_validation_and_default(client, auth_headers):
     for bad in ("2026-13", "2026-3", "march", "2026-00"):
         assert client.get(f"{API}/stats/cashflow?month={bad}", headers=auth_headers).status_code == 422
-    today = date.today()
+    today = app_today()
     assert (
         client.get(f"{API}/stats/cashflow", headers=auth_headers).json()["month"]
         == f"{today.year:04d}-{today.month:02d}"
@@ -89,7 +90,7 @@ def test_cashflow_month_validation_and_default(client, auth_headers):
 def test_contributions_never_count_as_spending(client, auth_headers, ids):
     """Requirement: goal contributions are allocations of savings, not expenses."""
     inc, exp = ids
-    today = date.today()
+    today = app_today()
     _income(client, auth_headers, 10000, inc["Salary"], today)
     _expense(client, auth_headers, 2500, exp["Random"], today)
     client.post(
@@ -191,7 +192,7 @@ def test_short_deadline_needs_at_least_one_month():
 
 
 def test_goal_crud_and_validation(client, auth_headers):
-    future = str(date.today() + timedelta(days=200))
+    future = str(app_today() + timedelta(days=200))
     assert client.post(f"{API}/goals", json={"name": "x", "target_amount": 0}, headers=auth_headers).status_code == 422
     assert (
         client.post(f"{API}/goals", json={"name": "  ", "target_amount": 10}, headers=auth_headers).status_code == 422
@@ -199,7 +200,7 @@ def test_goal_crud_and_validation(client, auth_headers):
     assert (
         client.post(
             f"{API}/goals",
-            json={"name": "x", "target_amount": 10, "target_date": str(date.today())},
+            json={"name": "x", "target_amount": 10, "target_date": str(app_today())},
             headers=auth_headers,
         ).status_code
         == 422
@@ -244,7 +245,7 @@ def test_contributions_and_withdrawals(client, auth_headers):
     assert client.post(url, json={"amount": 1.001}, headers=auth_headers).status_code == 422
     assert (
         client.post(
-            url, json={"amount": 10, "contributed_on": str(date.today() + timedelta(days=1))}, headers=auth_headers
+            url, json={"amount": 10, "contributed_on": str(app_today() + timedelta(days=1))}, headers=auth_headers
         ).status_code
         == 422
     )
@@ -281,7 +282,7 @@ def test_deleting_contributions_never_leaves_goal_negative(client, auth_headers)
 
 def test_delete_goal_removes_contributions_but_not_money(client, auth_headers, ids):
     inc, _ = ids
-    today = date.today()
+    today = app_today()
     _income(client, auth_headers, 5000, inc["Salary"], today)
     g = client.post(f"{API}/goals", json={"name": "Bike", "target_amount": 3000}, headers=auth_headers).json()
     client.post(f"{API}/goals/{g['id']}/contributions", json={"amount": 2000}, headers=auth_headers)

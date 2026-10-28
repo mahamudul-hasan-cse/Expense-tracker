@@ -4,6 +4,8 @@ from datetime import date, timedelta
 
 import pytest
 
+from app.timeutil import today as app_today
+
 API = "/api/v1"
 
 
@@ -25,6 +27,11 @@ def add_income(client, headers, amount, category_id, when=None, note=None):
 
 
 # --- Income categories -------------------------------------------------------
+
+
+def test_other_income_category_icon_is_not_a_plus_sign(client, auth_headers):
+    """➕ looked like an "add" button in the dashboard's Upcoming list."""
+    assert income_categories(client, auth_headers)["Other"]["icon"] == "💰"
 
 
 def test_defaults_seeded_on_registration(client, auth_headers):
@@ -95,7 +102,7 @@ def test_income_amount_uses_expense_money_rules(client, auth_headers, amount, st
 
 def test_income_date_rules(client, auth_headers):
     cid = income_categories(client, auth_headers)["Salary"]["id"]
-    tomorrow = date.today() + timedelta(days=1)
+    tomorrow = app_today() + timedelta(days=1)
     assert (
         client.post(
             f"{API}/incomes",
@@ -104,7 +111,7 @@ def test_income_date_rules(client, auth_headers):
         ).status_code
         == 422
     )
-    assert add_income(client, auth_headers, 1, cid)["income_date"] == str(date.today())
+    assert add_income(client, auth_headers, 1, cid)["income_date"] == str(app_today())
 
 
 def test_income_crud_and_listing(client, auth_headers):
