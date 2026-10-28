@@ -10,6 +10,12 @@ from app.monitoring import tag_request
 
 logger = logging.getLogger("app.requests")
 
+_SECURITY_HEADERS = [
+    (b"x-content-type-options", b"nosniff"),
+    (b"x-frame-options", b"DENY"),
+    (b"referrer-policy", b"no-referrer"),
+]
+
 
 class RequestLogMiddleware:
     """Assigns a request ID (X-Request-ID) and logs one line per request."""
@@ -35,7 +41,10 @@ class RequestLogMiddleware:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message["status"]
-                message.setdefault("headers", []).append((b"x-request-id", request_id.encode()))
+                headers = message.setdefault("headers", [])
+                headers.append((b"x-request-id", request_id.encode()))
+                # JSON API: never sniffed as another type, never framed
+                headers.extend(_SECURITY_HEADERS)
             await send(message)
 
         try:

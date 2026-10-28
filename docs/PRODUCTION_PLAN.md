@@ -444,14 +444,19 @@ Conventions as before: UUID PKs, `user_id → users ON DELETE CASCADE`, `NUMERIC
   The backend uses `X-Client-IP` for rate limiting **only** when the secret matches, and otherwise falls back to the peer IP.
 - The **per-account failed-login limit** (Phase 3) stays as the backstop that doesn't depend on IPs.
 
-## Phase 9 — Documentation
-- [ ] README rewrite (Mermaid architecture, env tables, tests, badge, screenshot list)
-- [ ] `docs/API.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `LICENSE` (after your choice)
+## Phase 9 — Documentation (done 2026-10-28)
+- [x] README rewrite: features, screenshots, stack, Mermaid architecture, Docker/local setup, env tables, tests, CI badge (main), live link
+- [x] `docs/API.md` (auth flow, conventions, streaming events, every route from the OpenAPI schema), `CONTRIBUTING.md`, `CHANGELOG.md` (1.0.0), `LICENSE` (MIT, Mahamudul Hasan)
 
-## Phase 10 — Final review
-- [ ] Clean-state run of everything (fresh DB, migrations from zero, all suites, builds, compose up)
-- [ ] Secret scan (repo + history), auth on every endpoint, CORS and rate limits on, `npm audit`, `pip-audit`
-- [ ] Final report + suggested next features (not built)
+## Phase 10 — Final review (done 2026-10-28)
+- [x] Clean state: fresh databases; migrations zero → head (11, via the deploy runner) → `alembic check` (no drift) → down to zero → up again; all suites; clean production build; screenshots re-captured. The Docker images and `compose --profile full` run in CI (Docker isn't running on the dev machine).
+- [x] **Security pass:**
+  - `pip-audit` found **known vulnerabilities in Starlette 0.35.1 / FastAPI 0.109** (Host/path not validated when rebuilding `request.url`; unbounded form parsing) plus anyio, certifi, Mako → upgraded to FastAPI 0.162 / Starlette 1.10; now **no known vulnerabilities**. `npm audit`: **0** (incl. dev).
+  - gitleaks over **all 49 commits** (incl. the original `main`): no leaks; only the `.env.example` files are tracked; no OpenRouter key in history.
+  - **Auth on every endpoint:** `test_auth_required.py` enumerates every route from the OpenAPI schema and requires 401 without a token and with a forged token (48 protected operations); public: `/`, `/health`, register, login, refresh, logout.
+  - Security headers: website (nosniff, no framing incl. CSP `frame-ancestors`, referrer policy, permissions policy, HSTS, no `X-Powered-By`) and API (nosniff, no framing, no referrer); e2e and backend tests.
+  - Already in place and tested: CORS allow-list, rate limits (per IP via the proxy secret + per account for failed logins), refresh cookie HttpOnly/Secure/Strict, Argon2, token revocation, production config checks, cross-user isolation tests, assistant tools bound to the signed-in user.
+- [x] Final report + next steps: see the summary given with this phase
 
 ## Optional later cleanups (not scheduled)
 - **Tailwind 4** (clears the last 4 moderate, build-time-only `npm audit` findings). Major upgrade: new config format, and shadcn component class changes.

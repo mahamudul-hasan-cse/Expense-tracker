@@ -48,6 +48,12 @@ The first production-ready release: accounts, income and goals, an AI assistant,
 - **Landing page:** rewritten to describe the app accurately.
 - **One error format** for the whole API; rate limits on every route, with stricter limits on login.
 
+### Security
+- **FastAPI 0.109 → 0.162 (Starlette 0.35 → 1.10):** fixes known vulnerabilities, including an unvalidated Host header and request path, and unbounded form parsing. Also anyio, certifi and Mako. `pip-audit` and `npm audit` now report nothing.
+- **Security headers** on the website (no framing, nosniff, referrer and permissions policies, HSTS) and the API.
+- **A test requires authentication on every API route** (it enumerates them, so new routes are covered automatically).
+- **Secret scan** of the full git history: clean.
+
 ### Fixed
 - **"Today" now uses the Asia/Dhaka date.** Before, an expense dated today was rejected between midnight and 6 AM in Dhaka.
 - **Streaming responses no longer crash under the rate limiter.** This affected CSV export and assistant answers.

@@ -398,14 +398,15 @@ export function Settings() {
               {recurring.map((rec) => (
                 <div
                   key={rec.id}
-                  className={`flex items-center justify-between rounded-lg border p-3 ${rec.is_active ? "" : "opacity-60"}`}
+                  // Details on top and actions below on phones; one row from sm up
+                  className={`flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between ${rec.is_active ? "" : "opacity-60"}`}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="text-xl" aria-hidden>
                       {(rec.kind === "income" ? rec.income_category : rec.category)?.icon}
                     </span>
-                    <div>
-                      <p className="font-medium">
+                    <div className="min-w-0">
+                      <p className="break-words font-medium">
                         {rec.name}
                         {rec.kind === "income" && (
                           <span className="ml-2 rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-normal text-emerald-700 dark:text-emerald-400">
@@ -423,7 +424,7 @@ export function Settings() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex shrink-0 items-center justify-end gap-1">
                     <Button
                       variant="outline"
                       size="sm"
